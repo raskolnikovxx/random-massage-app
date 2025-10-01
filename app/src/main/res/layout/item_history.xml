@@ -66,6 +66,17 @@
             app:layout_constraintBottom_toBottomOf="@id/iv_pin_toggle"
             tools:src="@drawable/ic_react_heart" />
 
+        <ImageView
+            android:id="@+id/iv_add_comment"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="16dp"
+            android:contentDescription="Yorum Ekle"
+            android:src="@drawable/ic_comment" app:layout_constraintStart_toEndOf="@id/iv_react_heart"
+            app:layout_constraintTop_toTopOf="@id/iv_react_heart"
+            app:layout_constraintBottom_toBottomOf="@id/iv_react_heart" />
+
+
         <TextView
             android:id="@+id/tv_history_reaction"
             android:layout_width="wrap_content"
@@ -73,10 +84,25 @@
             android:layout_marginStart="8dp"
             android:textSize="18sp"
             android:visibility="gone"
-            app:layout_constraintStart_toEndOf="@id/iv_react_heart"
-            app:layout_constraintTop_toTopOf="@id/iv_react_heart"
-            app:layout_constraintBottom_toBottomOf="@id/iv_react_heart"
+            app:layout_constraintStart_toEndOf="@id/iv_add_comment"
+            app:layout_constraintTop_toTopOf="@id/iv_add_comment"
+            app:layout_constraintBottom_toBottomOf="@id/iv_add_comment"
             tools:text="❤️" />
+
+        <TextView
+            android:id="@+id/tv_comment_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="16sp"
+            android:textColor="@android:color/black"
+            android:visibility="gone"
+            android:padding="8dp"
+            android:background="@drawable/background_comment_box"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/iv_pin_toggle"
+            tools:text="Not: Eşimden gelen yorum burada görünür."/>
 
         <ImageView
             android:id="@+id/iv_history_image"
@@ -87,7 +113,7 @@
             android:visibility="gone"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/iv_pin_toggle"
+            app:layout_constraintTop_toBottomOf="@id/tv_comment_text"
             app:layout_constraintBottom_toTopOf="@id/tv_history_time"
             tools:src="@tools:sample/backgrounds/scenic"
             android:contentDescription="Bildirim görseli" />

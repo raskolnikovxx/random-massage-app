@@ -11,11 +11,11 @@ data class RemoteSentence(
     val context: String? = null
 )
 
-// RemoteOverride objesi, zamanı ve **imageUrl**'u içerir.
+// Firebase'den çekilen override yapısı
 data class RemoteOverride(
-    val time: String = "", // "HH:mm" formatında saat
+    val time: String = "",
     val messageId: String? = null,
-    val imageUrl: String? = null // BU ALANIN TANIMI DOĞRU OLMALIDIR
+    val imageUrl: String? = null
 )
 
 // Remote Config'den çekilen ana konfigürasyon yapısı
@@ -41,16 +41,17 @@ data class NotificationHistory(
     val isQuote: Boolean = false,
     val context: String? = null,
     val reaction: String? = null,
+    val comment: String? = null, // YENİ: Yorum metni
     val isPinned: Boolean = false
 )
 
-// Firestore'a kaydedilecek veri modeli
+// Firestore'a kaydedilecek veri modeli (Tepki/Yorum)
 data class FirestoreHistoryItem(
     @get:Exclude val deviceId: String = "",
     val historyId: Long = 0,
     val messageId: String = "",
     val timestamp: Long = 0,
     val reaction: String? = null,
-    val comment: String? = null,
+    val comment: String? = null, // YENİ: Yorum metni
     val isPinned: Boolean = false
 )

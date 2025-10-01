@@ -32,6 +32,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.recyclerview)
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

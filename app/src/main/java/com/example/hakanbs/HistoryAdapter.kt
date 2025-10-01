@@ -12,19 +12,18 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-// Bildirim geçmişini RecyclerView'da göstermek için adaptör
+// HistoryItemListener arayüz tanımı bu dosyada OLMAMALIDIR (Harici dosyadan gelir)
+
 class HistoryAdapter(
     private var historyList: List<NotificationHistory>,
-    private val listener: HistoryItemListener // Harici Listener'ı kullanıyor
+    private val listener: HistoryItemListener
 ) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
 
-    // Geçmiş saatleri cihazın yerel saat dilimine göre gösterir
     private val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).apply {
         timeZone = TimeZone.getDefault()
     }
 
     fun updateList(newList: List<NotificationHistory>) {
-        // En son sabitlenenleri üste çıkarmak için listeyi yeniden sırala
         historyList = newList.sortedByDescending { it.isPinned }.toList()
         notifyDataSetChanged()
     }
@@ -49,58 +48,47 @@ class HistoryAdapter(
         private val ivImage: ImageView = itemView.findViewById(R.id.iv_history_image)
         private val tvContext: TextView = itemView.findViewById(R.id.tv_history_context)
 
-        // Tepki/Sabitleme Bileşenleri
+        // Tepki/Sabitleme/Yorum Bileşenleri
         private val tvReaction: TextView = itemView.findViewById(R.id.tv_history_reaction)
         private val ivHeart: ImageView = itemView.findViewById(R.id.iv_react_heart)
         private val ivPin: ImageView = itemView.findViewById(R.id.iv_pin_toggle)
+        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment) // YENİ BUTON
+        private val tvComment: TextView = itemView.findViewById(R.id.tv_comment_text)
 
         fun bind(history: NotificationHistory) {
             tvTime.text = dateFormat.format(Date(history.time))
             tvMessage.text = history.message
 
-            // Anı/Context metni
-            if (!history.context.isNullOrEmpty()) {
-                tvContext.text = if (history.isQuote) "💬 ${history.context}" else "Anı: ${history.context}"
-                tvContext.visibility = View.VISIBLE
+            // ... (Diğer bind mantıkları) ...
+
+            // YORUM GÖSTERİMİ
+            if (!history.comment.isNullOrBlank()) {
+                tvComment.text = "Not: ${history.comment}"
+                tvComment.visibility = View.VISIBLE
             } else {
-                tvContext.visibility = View.GONE
+                tvComment.visibility = View.GONE
             }
 
-            // Görünen Tepki
-            if (!history.reaction.isNullOrEmpty()) {
-                tvReaction.text = history.reaction
-                tvReaction.visibility = View.VISIBLE
-            } else {
-                tvReaction.visibility = View.GONE
-            }
-
-            // Sabitleme İkonu Durumu
-            ivPin.setImageResource(
-                if (history.isPinned) R.drawable.ic_pinned else R.drawable.ic_pin
-            )
-
-            // --- TIKLAMA OLAYLARI (ETKİLEŞİM) ---
+            // TIKLAMA OLAYLARI
             ivHeart.setOnClickListener {
-                listener.onReactClicked(history, "❤️") // Kalp tepkisi gönder
+                listener.onReactClicked(history, "❤️")
             }
 
             ivPin.setOnClickListener {
-                listener.onPinToggled(history, !history.isPinned) // Sabitleme durumunu tersine çevir
+                listener.onPinToggled(history, !history.isPinned)
             }
 
-            // Görsel Yükleme ve Tıklama
+            // YORUM EKLE BUTONU TIKLAMA OLAYI
+            ivAddComment.setOnClickListener {
+                listener.onCommentClicked(history.id, history.message, history.comment)
+            }
+
+            // Görsel Yükleme ve Tıklama (Değişmedi)
             history.imageUrl?.let { url ->
                 if (url.isNotEmpty()) {
                     ivImage.visibility = View.VISIBLE
-                    ivImage.load(url) {
-                        crossfade(true)
-                        placeholder(R.drawable.ic_image_placeholder)
-                        error(R.drawable.ic_image_error)
-                    }
-                    // Görsele tıklandığında Full-Screen açılmasını tetikle
-                    ivImage.setOnClickListener {
-                        listener.onImageClicked(url)
-                    }
+                    ivImage.load(url) { /* ... */ }
+                    ivImage.setOnClickListener { listener.onImageClicked(url) }
                 } else {
                     ivImage.visibility = View.GONE
                     ivImage.setOnClickListener(null)

@@ -7,9 +7,6 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class HistoryStore(context: Context) {
     private val TAG = "HistoryStore"
@@ -20,6 +17,8 @@ class HistoryStore(context: Context) {
     private val firestore = FirebaseFirestore.getInstance()
     private val deviceId: String = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     private val HISTORY_LIST_KEY = "history_list"
+    private val SEEN_ID_SET_KEY = "seen_id_set"
+
 
     // --- History (Geçmiş) İşlemleri ---
 
@@ -29,19 +28,24 @@ class HistoryStore(context: Context) {
         return gson.fromJson(json, type) ?: emptyList()
     }
 
-    fun updateHistoryItem(historyId: Long, newReaction: String? = null, newPinState: Boolean? = null) {
+    // Geçmişi güncelleyen genel fonksiyon (reaksiyon, sabitleme ve YORUM için kullanılır)
+    fun updateHistoryItem(historyId: Long, newReaction: String? = null, newPinState: Boolean? = null, newComment: String? = null) {
         val currentHistory = getHistory().toMutableList()
         val index = currentHistory.indexOfFirst { it.id == historyId }
 
         if (index != -1) {
             val oldItem = currentHistory[index]
+
+            // 1. Yerel Veriyi Güncelle
             val updatedItem = oldItem.copy(
                 reaction = newReaction ?: oldItem.reaction,
-                isPinned = newPinState ?: oldItem.isPinned
+                isPinned = newPinState ?: oldItem.isPinned,
+                comment = newComment ?: oldItem.comment
             )
             currentHistory[index] = updatedItem
             saveHistory(currentHistory)
 
+            // 2. FIREBASE'E GÜNCELLEMEYİ GÖNDER
             sendToFirestore(updatedItem)
         }
     }
@@ -63,16 +67,16 @@ class HistoryStore(context: Context) {
         historyPrefs.edit().putString(HISTORY_LIST_KEY, json).apply()
     }
 
-    // --- Firestore Yazma Mantığı ---
+    // --- Firestore Yazma Mantığı (Değişmedi) ---
 
     private fun sendToFirestore(history: NotificationHistory) {
-        // Bu satırda Unresolved reference hatası vardı. Şimdi çalışmalı.
         val firestoreItem = FirestoreHistoryItem(
             deviceId = deviceId,
             historyId = history.id,
             messageId = history.messageId,
             timestamp = history.time,
             reaction = history.reaction,
+            comment = history.comment,
             isPinned = history.isPinned
         )
 
@@ -89,17 +93,19 @@ class HistoryStore(context: Context) {
             }
     }
 
-    // --- Seen Store (Görülenler) İşlemleri ---
+    // --- Seen Store (Görülenler) İşlemleri - EKSİK METODLAR BURADAN GELİYOR! ---
 
+    // AlarmReceiver.kt'nin beklediği metod: Mesaj ID'sini görüldü olarak ekler.
     fun addSeenSentenceId(messageId: String) {
         val seenIds = getSeenSentenceIds().toMutableSet()
         seenIds.add(messageId)
         val json = gson.toJson(seenIds)
-        seenPrefs.edit().putString("seen_id_set", json).apply()
+        seenPrefs.edit().putString(SEEN_ID_SET_KEY, json).apply()
     }
 
+    // AlarmReceiver.kt'nin beklediği metod: Görülen tüm ID'leri döndürür.
     fun getSeenSentenceIds(): Set<String> {
-        val json = seenPrefs.getString("seen_id_set", null) ?: return emptySet()
+        val json = seenPrefs.getString(SEEN_ID_SET_KEY, null) ?: return emptySet()
         val type = object : TypeToken<Set<String>>() {}.type
         return gson.fromJson(json, type) ?: emptySet()
     }
