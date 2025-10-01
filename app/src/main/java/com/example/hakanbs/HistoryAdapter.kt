@@ -12,11 +12,11 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-// HistoryItemListener arayüz tanımı bu dosyada OLMAMALIDIR (Harici dosyadan gelir)
+// UYARI: HistoryItemListener arayüz tanımı BURADA OLMAMALIDIR (Bu kısım silindi)
 
 class HistoryAdapter(
     private var historyList: List<NotificationHistory>,
-    private val listener: HistoryItemListener
+    private val listener: HistoryItemListener // Harici Listener'ı kullanıyor
 ) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
 
     private val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).apply {
@@ -24,6 +24,7 @@ class HistoryAdapter(
     }
 
     fun updateList(newList: List<NotificationHistory>) {
+        // Favorilere göre sıralama (isPinned, isFavorite olarak kullanılıyor)
         historyList = newList.sortedByDescending { it.isPinned }.toList()
         notifyDataSetChanged()
     }
@@ -51,43 +52,49 @@ class HistoryAdapter(
         // Tepki/Sabitleme/Yorum Bileşenleri
         private val tvReaction: TextView = itemView.findViewById(R.id.tv_history_reaction)
         private val ivHeart: ImageView = itemView.findViewById(R.id.iv_react_heart)
-        private val ivPin: ImageView = itemView.findViewById(R.id.iv_pin_toggle)
-        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment) // YENİ BUTON
+        private val ivFavorite: ImageView = itemView.findViewById(R.id.iv_favorite_toggle)
+        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment)
         private val tvComment: TextView = itemView.findViewById(R.id.tv_comment_text)
 
         fun bind(history: NotificationHistory) {
             tvTime.text = dateFormat.format(Date(history.time))
             tvMessage.text = history.message
 
-            // ... (Diğer bind mantıkları) ...
-
-            // YORUM GÖSTERİMİ
-            if (!history.comment.isNullOrBlank()) {
-                tvComment.text = "Not: ${history.comment}"
-                tvComment.visibility = View.VISIBLE
+            if (!history.context.isNullOrEmpty()) {
+                tvContext.text = if (history.isQuote) "💬 ${history.context}" else "Anı: ${history.context}"
+                tvContext.visibility = View.VISIBLE
             } else {
-                tvComment.visibility = View.GONE
+                tvContext.visibility = View.GONE
             }
 
-            // TIKLAMA OLAYLARI
-            ivHeart.setOnClickListener {
-                listener.onReactClicked(history, "❤️")
+            // Görünen Tepki
+            if (!history.reaction.isNullOrEmpty()) {
+                tvReaction.text = history.reaction
+                tvReaction.visibility = View.VISIBLE
+            } else {
+                tvReaction.visibility = View.GONE
             }
 
-            ivPin.setOnClickListener {
-                listener.onPinToggled(history, !history.isPinned)
-            }
+            // Favori İkonu Durumu
+            ivFavorite.setImageResource(
+                if (history.isPinned) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
+            )
 
-            // YORUM EKLE BUTONU TIKLAMA OLAYI
-            ivAddComment.setOnClickListener {
-                listener.onCommentClicked(history.id, history.message, history.comment)
+            // --- TIKLAMA OLAYLARI ---
+            ivFavorite.setOnClickListener {
+                listener.onFavoriteToggled(history, !history.isPinned)
             }
+            // ... (Diğer tıklama olayları) ...
 
             // Görsel Yükleme ve Tıklama (Değişmedi)
             history.imageUrl?.let { url ->
                 if (url.isNotEmpty()) {
                     ivImage.visibility = View.VISIBLE
-                    ivImage.load(url) { /* ... */ }
+                    ivImage.load(url) {
+                        crossfade(true)
+                        placeholder(R.drawable.ic_image_placeholder)
+                        error(R.drawable.ic_image_error)
+                    }
                     ivImage.setOnClickListener { listener.onImageClicked(url) }
                 } else {
                     ivImage.visibility = View.GONE

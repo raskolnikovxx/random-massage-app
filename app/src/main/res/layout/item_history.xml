@@ -44,27 +44,25 @@
             tools:text="💬 2023 Yaz Tatili - O sözün" />
 
         <ImageView
-            android:id="@+id/iv_pin_toggle"
+            android:id="@+id/iv_favorite_toggle"
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_marginTop="12dp"
-            android:contentDescription="Sabitle"
-            android:src="@drawable/ic_pin"
+            android:contentDescription="Favoriye Ekle"
+            android:src="@drawable/ic_favorite_border"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tv_history_context"
-            tools:src="@drawable/ic_pinned" />
-
-        <ImageView
-            android:id="@+id/iv_react_heart"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginStart="16dp"
-            android:contentDescription="Tepki Ekle"
-            android:src="@drawable/ic_react_heart"
-            app:layout_constraintStart_toEndOf="@id/iv_pin_toggle"
-            app:layout_constraintTop_toTopOf="@id/iv_pin_toggle"
-            app:layout_constraintBottom_toBottomOf="@id/iv_pin_toggle"
-            tools:src="@drawable/ic_react_heart" />
+            tools:src="@drawable/ic_favorite_filled" /> <ImageView
+        android:id="@+id/iv_react_heart"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="16dp"
+        android:contentDescription="Tepki Ekle"
+        android:src="@drawable/ic_react_heart"
+        app:layout_constraintStart_toEndOf="@id/iv_favorite_toggle"
+        app:layout_constraintTop_toTopOf="@id/iv_favorite_toggle"
+        app:layout_constraintBottom_toBottomOf="@id/iv_favorite_toggle"
+        tools:src="@drawable/ic_react_heart" />
 
         <ImageView
             android:id="@+id/iv_add_comment"
@@ -72,7 +70,8 @@
             android:layout_height="24dp"
             android:layout_marginStart="16dp"
             android:contentDescription="Yorum Ekle"
-            android:src="@drawable/ic_comment" app:layout_constraintStart_toEndOf="@id/iv_react_heart"
+            android:src="@drawable/ic_comment"
+            app:layout_constraintStart_toEndOf="@id/iv_react_heart"
             app:layout_constraintTop_toTopOf="@id/iv_react_heart"
             app:layout_constraintBottom_toBottomOf="@id/iv_react_heart" />
 
@@ -101,7 +100,7 @@
             android:background="@drawable/background_comment_box"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/iv_pin_toggle"
+            app:layout_constraintTop_toBottomOf="@id/iv_favorite_toggle"
             tools:text="Not: Eşimden gelen yorum burada görünür."/>
 
         <ImageView

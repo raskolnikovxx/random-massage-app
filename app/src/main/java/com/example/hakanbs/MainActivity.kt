@@ -8,25 +8,25 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log // EKLENDİ: Log hatasını çözer
 import android.view.View
-import android.widget.EditText // EKLENDİ
+import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast // EKLENDİ: Toast hatalarını çözer
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout // EKLENDİ
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkManager
 import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
-import android.util.Log
 
 // MainActivity, HistoryItemListener arayüzünü uygular
 class MainActivity : AppCompatActivity(), HistoryItemListener {
@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private lateinit var historyStore: HistoryStore
     private lateinit var controlConfig: ControlConfig
 
+    // Android 13+ Bildirim İzni Launcher'ı
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -56,7 +57,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
     }
 
-    // --- HistoryItemListener Metotları (override abstract member hatasını çözer) ---
+    // --- HistoryItemListener Uygulamaları ---
 
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
         showCommentDialog(historyId, originalMessage, currentComment)
@@ -73,9 +74,9 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
     }
 
-    override fun onPinToggled(history: NotificationHistory, isPinned: Boolean) {
+    override fun onFavoriteToggled(history: NotificationHistory, isFavorite: Boolean) {
         CoroutineScope(Dispatchers.IO).launch {
-            historyStore.updateHistoryItem(history.id, newPinState = isPinned)
+            historyStore.updateHistoryItem(history.id, newPinState = isFavorite)
             withContext(Dispatchers.Main) {
                 loadHistory()
             }
@@ -98,13 +99,11 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
         setupUI()
 
-        // Unresolved reference hataları buradan kaynaklanıyordu:
         requestNotificationPermission()
         checkAlarmPermission()
 
-        // Planlama ve Senkronizasyonu başlat
         SyncRemoteWorker.schedule(this)
-        startInitialSync() // Unresolved reference 'startInitialSync' buradan kaynaklanıyordu
+        startInitialSync()
 
         Log.d(TAG, "MainActivity initialized successfully.")
     }
@@ -114,12 +113,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         loadHistory()
     }
 
-    // --- Helper Fonksiyonlar (Unresolved reference hatalarını çözen tanımlar) ---
+    // --- Helper Fonksiyonlar ---
 
     private fun setupUI() {
         recyclerView = findViewById(R.id.recycler_view_history)
         tvEmpty = findViewById(R.id.tv_empty_history)
-        swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout) // Layout ID'si çözülür
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
 
         historyAdapter = HistoryAdapter(emptyList(), this)
         recyclerView.apply {
@@ -129,21 +128,22 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
         swipeRefreshLayout.setOnRefreshListener {
             loadHistory()
-            fetchRemoteConfig() // Firebase'den hemen veri çek
+            fetchRemoteConfig()
         }
+
+        loadHistory()
     }
 
     private fun loadHistory() {
-        // Hata veren isRefreshing çağrısı
         swipeRefreshLayout.isRefreshing = true
 
         val history = historyStore.getHistory()
         historyAdapter.updateList(history)
 
         val config = controlConfig.getLocalConfig()
-        updateUiTexts(config) // Unresolved reference 'updateUiTexts' buradan kaynaklanıyordu
+        updateUiTexts(config)
 
-        swipeRefreshLayout.isRefreshing = false // Yükleme bittiğinde kapat
+        swipeRefreshLayout.isRefreshing = false
         tvEmpty.visibility = if (history.isEmpty()) View.VISIBLE else View.GONE
     }
 
@@ -155,19 +155,19 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             Planner(this@MainActivity, config).scheduleAllNotifications()
 
             withContext(Dispatchers.Main) {
-                loadHistory() // UI'ı ana thread'de yenile
+                loadHistory()
             }
         }
     }
 
-    private fun startInitialSync() { // Unresolved reference 'startInitialSync' buradan kaynaklanıyordu
+    private fun startInitialSync() {
         val oneTimeSync = androidx.work.OneTimeWorkRequestBuilder<SyncRemoteWorker>()
             .setInitialDelay(10, java.util.concurrent.TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(this).enqueue(oneTimeSync)
     }
 
-    private fun updateUiTexts(config: RemoteConfig) { // Unresolved reference 'updateUiTexts' buradan kaynaklanıyordu
+    private fun updateUiTexts(config: RemoteConfig) {
         supportActionBar?.title = config.activityTitle
         tvEmpty.text = config.emptyMessage
     }
@@ -210,7 +210,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
     }
 
-    // HASSAS ALARM İZNİ KONTROLÜ
     private fun checkAlarmPermission() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -226,6 +225,17 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
                     .setMessage("Uygulama tam zamanında bildirim göndermek için izin isterse onaylayın. Aksi takdirde, bildirimleriniz birkaç dakika gecikebilir.")
                     .setPositiveButton("Anladım") { _, _ -> /* Kapat */ }
                     .show()
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == POST_NOTIFICATIONS_PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Bildirim izni alındı.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Bildirim izni olmadan alarm gelmeyebilir.", Toast.LENGTH_LONG).show()
             }
         }
     }
