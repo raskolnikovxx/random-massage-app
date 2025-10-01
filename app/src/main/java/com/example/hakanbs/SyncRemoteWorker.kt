@@ -15,17 +15,24 @@ class SyncRemoteWorker(appContext: Context, workerParams: WorkerParameters) :
     private val TAG = "SyncRemoteWorker"
 
     override suspend fun doWork(): Result {
-        Log.d(TAG, "SyncRemoteWorker started.")
-        val controlConfig = ControlConfig(applicationContext)
+        return try {
+            val configManager = ControlConfig(applicationContext)
 
-        // 1. Firebase'den konfigürasyonu çek
-        val newConfig = controlConfig.fetchConfig() ?: controlConfig.getLocalConfig()
+            // 1. Firebase yapılandırmasını çek ve kaydet
+            configManager.fetchConfig()
 
-        // 2. Alarmları yeni/eski konfigürasyon ile yeniden planla
-        Planner(applicationContext, newConfig).scheduleAllNotifications()
+            // 2. Günlük zamanlayıcı işinin sıraya eklendiğinden emin ol
+            DailySchedulerWorker.enqueueWork(applicationContext)
 
-        Log.d(TAG, "SyncRemoteWorker finished. Alarms re-scheduled.")
-        return Result.success()
+            // 3. (ÖNEMLİ!) Planner.scheduleAllNotifications() çağrısı buradan kaldırıldı.
+            // Artık planlama sadece DailySchedulerWorker tarafından yapılacak.
+
+            Log.i(TAG, "Remote config sync successful and daily scheduler ensured.")
+            Result.success()
+        } catch (e: Exception) {
+            Log.e(TAG, "Remote config sync failed: ${e.message}")
+            Result.failure()
+        }
     }
 
     companion object {

@@ -21,21 +21,15 @@ class ControlConfig(private val context: Context) {
 
 
     init {
-        // Firebase Remote Config ayarları başlatılır
         val configSettings = remoteConfigSettings {
-            // Hata veren BuildConfig.DEBUG yerine basit bir kontrol veya sabit süre kullanılır (Geliştirme için 60 saniye)
             minimumFetchIntervalInSeconds = 60
         }
         firebaseRemoteConfig.setConfigSettingsAsync(configSettings)
 
-        // Varsayılan boş konfigürasyonu ayarla
         val defaultJson = gson.toJson(RemoteConfig())
         firebaseRemoteConfig.setDefaultsAsync(mapOf("app_config" to defaultJson))
     }
 
-    // ... (geri kalan fonksiyonlar aynı)
-
-    // Firebase'den JSON'u çeker ve yerel olarak kaydeder
     suspend fun fetchConfig(): RemoteConfig? = withContext(Dispatchers.IO) {
         Log.d(TAG, "Fetching config from Firebase Remote Config.")
 

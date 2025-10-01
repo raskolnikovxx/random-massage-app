@@ -2,6 +2,7 @@ package com.example.hakanbs
 
 import android.Manifest
 import android.app.AlarmManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -20,6 +21,10 @@ import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
+
+    // YENİ VE DÜZELTİLMİŞ SABİTLER BURAYA EKLENDİ
+    private val PREFS_NAME = "AppPrefs"
+    private val PREF_ALARM_DIALOG_SHOWN = "alarm_dialog_shown"
 
     // Layout bileşenleri
     private lateinit var rvHistory: RecyclerView
@@ -41,24 +46,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // HistoryItemListener'ın implementasyonu (Etkileşimleri yönetir)
+    // HistoryItemListener'ın implementasyonu
     private val historyItemListener = object : HistoryItemListener {
         override fun onReactClicked(history: NotificationHistory, emoji: String) {
             historyStore.updateHistoryItem(history.id, newReaction = emoji)
             loadHistory()
-            // Firestore'a gönderme işlemi burada tetiklenecektir
             Toast.makeText(this@MainActivity, "Tepki kaydedildi: ${emoji}", Toast.LENGTH_SHORT).show()
         }
 
         override fun onPinToggled(history: NotificationHistory, isPinned: Boolean) {
             historyStore.updateHistoryItem(history.id, newPinState = isPinned)
             loadHistory()
-            // Firestore'a gönderme işlemi burada tetiklenecektir
             Toast.makeText(this@MainActivity, if (isPinned) "Anı sabitlendi." else "Sabitleme kaldırıldı.", Toast.LENGTH_SHORT).show()
         }
 
         override fun onImageClicked(imageUrl: String) {
-            // Full screen görsel açma mantığı buraya gelir
             Toast.makeText(this@MainActivity, "Görsel Yolu: $imageUrl (Full Ekran Açılacak)", Toast.LENGTH_LONG).show()
         }
     }
@@ -76,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         historyStore = HistoryStore(this)
         controlConfig = ControlConfig(this)
 
-        // RecyclerView Kurulumu (Listener bağlandı)
+        // RecyclerView Kurulumu
         historyAdapter = HistoryAdapter(emptyList(), historyItemListener)
         rvHistory.layoutManager = LinearLayoutManager(this)
         rvHistory.adapter = historyAdapter
@@ -87,7 +89,8 @@ class MainActivity : AppCompatActivity() {
 
         // Planlama ve Senkronizasyonu başlat
         SyncRemoteWorker.schedule(this)
-        startInitialSync()
+        DailySchedulerWorker.enqueueWork(applicationContext) // 4 AM planlaması
+        startInitialSync() // İlk veri çekme
 
         Log.d(TAG, "MainActivity initialized successfully.")
     }
@@ -119,7 +122,7 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this).enqueue(oneTimeSync)
     }
 
-    // Bildirim İzni İsteme (Basit ve izin isteyen tek fonksiyon)
+    // Bildirim İzni İsteme
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -128,12 +131,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Hassas Alarm İzni Kontrolü (Sadece bilgilendirme)
+    // HASSAS ALARM İZNİ KONTROLÜ (Dialogu sadece ilk kez gösterir)
     private fun checkAlarmPermission() {
+        // SharedPreferences'ı doğru sabiti kullanarak al
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        // Android 12 ve üzeri için kontrol
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
 
-            if (!alarmManager.canScheduleExactAlarms()) {
+            // Eğer izin verilmediyse VE dialog daha önce gösterilmediyse
+            if (!alarmManager.canScheduleExactAlarms() && !prefs.getBoolean(PREF_ALARM_DIALOG_SHOWN, false)) {
+
+                // Dialog gösterildi bayrağını ayarla
+                prefs.edit().putBoolean(PREF_ALARM_DIALOG_SHOWN, true).apply()
 
                 androidx.appcompat.app.AlertDialog.Builder(this)
                     .setTitle("BİLGİLENDİRME")
