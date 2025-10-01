@@ -1,45 +1,55 @@
 package com.example.hakanbs
 
-// Bildirim içerikleri
+import com.google.firebase.firestore.Exclude
+import com.google.gson.annotations.SerializedName
+
+// Firebase'den çekilen mesaj yapısı
 data class RemoteSentence(
-    val id: String,
-    val text: String,
+    val id: String = "",
+    val text: String = "",
     val isQuote: Boolean = false,
-    val context: String? = null // Cümlenin anlamını açıklayan anı, şarkı sözü vb.
+    val context: String? = null
 )
 
-// Saat override (belli bir saatte belli bir mesaj göndermek için)
-data class TimeOverride(
-    val time: String, // "HH:mm" formatında (örn: "14:30")
-    val messageId: String // Gönderilecek RemoteSentence ID'si
+// Firebase'den çekilen override yapısı
+data class RemoteOverride(
+    val time: String = "", // "HH:mm" formatında saat
+    val messageId: String? = null
 )
 
-// Remote Config'den çekilen ana konfigürasyon yapısı
+// Firebase Remote Config'den çekilen ana konfigürasyon yapısı
 data class RemoteConfig(
-    val enabled: Boolean = true, // <-- BURASI ARTIK TRUE
+    val enabled: Boolean = true,
     val startHour: Int = 10,
     val endHour: Int = 22,
     val timesPerDay: Int = 8,
-    val sentences: List<RemoteSentence> = listOf( // <-- VARSAYILAN CÜMLELER EKLENDİ
-        RemoteSentence(id = "DEF01", text = "İyi ki varsın! Bu varsayılan bir başlangıç mesajıdır."),
-        RemoteSentence(id = "DEF02", text = "Günün güzel geçsin! Firebase'den veri çekilene kadar bu cümleler kullanılır."),
-        RemoteSentence(id = "DEF03", text = "Seni seviyorum 💖")
-    ),
+    val sentences: List<RemoteSentence> = emptyList(),
     val images: List<String> = emptyList(),
-    val overrides: List<TimeOverride> = emptyList(),
-    val activityTitle: String = "Sürpriz Notlar Geçmişi",
-    val emptyMessage: String = "Henüz mesaj yok. İlk alarm ve yeni not bekleniyor!"
+    val overrides: List<RemoteOverride> = emptyList(),
+    val activityTitle: String = "Anılarımız",
+    val emptyMessage: String = "Henüz anı yok..."
 )
 
-// Bildirim Geçmişi Kaydı (Yerel veritabanında saklanır)
+// Bildirim geçmişi için yerel veri modeli
 data class NotificationHistory(
-    val id: Long = 0,
-    val time: Long,
-    val messageId: String,
-    val message: String,
-    val reaction: String? = null,
+    val id: Long = System.currentTimeMillis(),
+    val time: Long = 0,
+    val messageId: String = "",
+    val message: String = "",
     val imageUrl: String? = null,
-    val isPinned: Boolean = false,
     val isQuote: Boolean = false,
-    val context: String? = null
+    val context: String? = null,
+    val reaction: String? = null,
+    val isPinned: Boolean = false
+)
+
+// FIRESTORE'A KAYDEDİLECEK VERİ MODELİ (Bu sınıf HistoryStore tarafından aranıyor)
+data class FirestoreHistoryItem(
+    @get:Exclude val deviceId: String = "",
+    val historyId: Long = 0,
+    val messageId: String = "",
+    val timestamp: Long = 0,
+    val reaction: String? = null,
+    val comment: String? = null,
+    val isPinned: Boolean = false
 )

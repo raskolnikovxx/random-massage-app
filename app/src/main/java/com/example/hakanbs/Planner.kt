@@ -41,7 +41,7 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
                 val slotEndMinute = startHour * 60 + (i + 1) * slotDuration
                 val randomMinuteInSlot = Random.nextInt(slotStartMinute, slotEndMinute)
 
-                // Yerel saat dilimi kullanılır (Cihazın saati)
+                // Yerel saat dilimi kullanılır
                 val calendar = Calendar.getInstance().apply {
                     timeInMillis = System.currentTimeMillis()
                     set(Calendar.HOUR_OF_DAY, randomMinuteInSlot / 60)
@@ -91,7 +91,7 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
         Log.d(TAG, "Total ${scheduledTimes.size} notifications scheduled.")
     }
 
-    // Tek bir bildirimi planlar (setExact kullanır)
+    // Tek bir bildirimi planlar (set() metodunu kullanır, izin gerektirmez)
     private fun scheduleNotification(timeMillis: Long, messageId: String?) {
         val requestCode = (timeMillis / 1000).toInt() + ALARM_ID_BASE
 
@@ -108,8 +108,9 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // setExact kullanıldı: İzin gerektirmez, küçük gecikmeler kabul edilir.
-        alarmManager.setExact(
+        // setExact() yerine en az kısıtlamalı olan set() metodu kullanılır.
+        // Bu, SecurityException hatasını kesinlikle çözer ve küçük gecikmeler kabul edilir.
+        alarmManager.set(
             AlarmManager.RTC_WAKEUP,
             timeMillis,
             pendingIntent
