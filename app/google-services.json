@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "82638450235",
+    "project_id": "hakanbhs-96cd1",
+    "storage_bucket": "hakanbhs-96cd1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:82638450235:android:f5ce32de588b070c28361e",
+        "android_client_info": {
+          "package_name": "com.example.hakanbs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-6BBOAJrOGNHgXvp-iPfD_WkaHH8-jAs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

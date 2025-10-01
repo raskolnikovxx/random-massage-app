@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="6dp"
+    app:cardBackgroundColor="@android:color/white">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tv_history_message"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textColor="@android:color/black"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="Unutulmaz bir anımız oldu, ne güzeldi o günler..." />
+
+        <TextView
+            android:id="@+id/tv_history_context"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="12sp"
+            android:textColor="@android:color/holo_red_dark"
+            android:textStyle="italic"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_history_message"
+            tools:text="💬 2023 Yaz Tatili - O sözün" />
+
+        <ImageView
+            android:id="@+id/iv_pin_toggle"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="12dp"
+            android:contentDescription="Sabitle"
+            android:src="@drawable/ic_pin"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_history_context"
+            tools:src="@drawable/ic_pinned" />
+
+        <ImageView
+            android:id="@+id/iv_react_heart"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="16dp"
+            android:contentDescription="Tepki Ekle"
+            android:src="@drawable/ic_react_heart"
+            app:layout_constraintStart_toEndOf="@id/iv_pin_toggle"
+            app:layout_constraintTop_toTopOf="@id/iv_pin_toggle"
+            app:layout_constraintBottom_toBottomOf="@id/iv_pin_toggle"
+            tools:src="@drawable/ic_react_heart" />
+
+        <TextView
+            android:id="@+id/tv_history_reaction"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textSize="18sp"
+            android:visibility="gone"
+            app:layout_constraintStart_toEndOf="@id/iv_react_heart"
+            app:layout_constraintTop_toTopOf="@id/iv_react_heart"
+            app:layout_constraintBottom_toBottomOf="@id/iv_react_heart"
+            tools:text="❤️" />
+
+        <ImageView
+            android:id="@+id/iv_history_image"
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:layout_marginTop="16dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/iv_pin_toggle"
+            app:layout_constraintBottom_toTopOf="@id/tv_history_time"
+            tools:src="@tools:sample/backgrounds/scenic"
+            android:contentDescription="Bildirim görseli" />
+
+        <TextView
+            android:id="@+id/tv_history_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/iv_history_image"
+            tools:text="29/09 11:57" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>
