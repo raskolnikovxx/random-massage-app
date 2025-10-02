@@ -15,14 +15,10 @@
         android:theme="@style/Theme.Hakanbs"
         tools:targetApi="34">
 
-
-
-
         <activity
             android:name=".FullscreenMediaActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
-
 
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -39,6 +35,22 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".ActionReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter> <action android:name="com.example.hakanbs.ACTION_REACT" />
+                <action android:name="com.example.hakanbs.ACTION_PIN" />
+            </intent-filter> </receiver>
+
+        <receiver
+            android:name=".CommentReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter> <action android:name="com.example.hakanbs.ACTION_COMMENT" />
+            </intent-filter> </receiver>
+
 
         <provider android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

@@ -28,8 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
-import android.widget.LinearLayout // Yeni notlar için eklendi
-import android.widget.ScrollView // Yeni notlar için eklendi
+import android.widget.LinearLayout // Diyalog için eklendi
+import android.widget.ScrollView  // Diyalog için eklendi
 import java.text.SimpleDateFormat // Not tarihleri için
 import java.util.Date // Not tarihleri için
 import java.util.Locale // Not tarihleri için
@@ -68,12 +68,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     // --- HistoryItemListener Uygulamaları ---
 
-    // onCommentClicked metodu artık List<Note> yapısını çağıracak
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
+        // Yorum listesini çekip diyaloğa gönder
         val history = historyStore.getHistory().find { it.id == historyId }
-        val existingNotes = history?.comments ?: emptyList()
+        val existingNotes = history?.comments ?: emptyList() // Yeni List<Note> yapısını kullanır
 
-        showNoteEntryDialog(historyId, originalMessage, existingNotes) // Yeni metot çağrıldı
+        showNoteEntryDialog(historyId, originalMessage, existingNotes)
     }
 
     override fun onReactClicked(history: NotificationHistory, emoji: String) {
@@ -270,7 +270,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
                 val newComment = input.text.toString()
                 if (newComment.isNotBlank()) {
                     CoroutineScope(Dispatchers.IO).launch {
-                        // YENİ FONKSİYON KULLANILDI: Notu listeye ekle
+                        // YORUMU KAYDETMEK İÇİN YENİ METOT KULLANILDI
                         historyStore.addNoteToHistoryItem(historyId, newComment)
                         withContext(Dispatchers.Main) {
                             loadHistory()
