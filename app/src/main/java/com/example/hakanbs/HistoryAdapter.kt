@@ -12,7 +12,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-// UYARI: HistoryItemListener arayüz tanımı BURADA OLMAMALIDIR (Bu kısım silindi)
+// UYARI: HistoryItemListener arayüz tanımı BURADA OLMAMALIDIR (Harici dosyadan gelir)
 
 class HistoryAdapter(
     private var historyList: List<NotificationHistory>,
@@ -53,7 +53,7 @@ class HistoryAdapter(
         private val tvReaction: TextView = itemView.findViewById(R.id.tv_history_reaction)
         private val ivHeart: ImageView = itemView.findViewById(R.id.iv_react_heart)
         private val ivFavorite: ImageView = itemView.findViewById(R.id.iv_favorite_toggle)
-        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment)
+        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment) // YORUM BUTONU
         private val tvComment: TextView = itemView.findViewById(R.id.tv_comment_text)
 
         fun bind(history: NotificationHistory) {
@@ -75,18 +75,28 @@ class HistoryAdapter(
                 tvReaction.visibility = View.GONE
             }
 
-            // Favori İkonu Durumu
+            // Sabitleme İkonu Durumu
             ivFavorite.setImageResource(
                 if (history.isPinned) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
             )
 
-            // --- TIKLAMA OLAYLARI ---
+            // --- TIKLAMA OLAYLARI (YORUM BUTONU BURADA AKTİF EDİLİYOR) ---
+
             ivFavorite.setOnClickListener {
                 listener.onFavoriteToggled(history, !history.isPinned)
             }
-            // ... (Diğer tıklama olayları) ...
 
-            // Görsel Yükleme ve Tıklama (Değişmedi)
+            ivHeart.setOnClickListener {
+                listener.onReactClicked(history, "❤️")
+            }
+
+            // YENİ: Yorum Ekle Butonu Aktifleştirildi
+            ivAddComment.setOnClickListener {
+                // Tıklama olayını MainActivity'ye ilet
+                listener.onCommentClicked(history.id, history.message, history.comment)
+            }
+
+            // Görsel Yükleme ve Tıklama
             history.imageUrl?.let { url ->
                 if (url.isNotEmpty()) {
                     ivImage.visibility = View.VISIBLE

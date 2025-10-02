@@ -8,10 +8,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log // EKLENDİ: Log hatasını çözer
+import android.util.Log
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -21,14 +22,13 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkManager
 import androidx.activity.result.contract.ActivityResultContracts
-import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
+import android.widget.ImageView // ImageView sınıfı için
 
-// MainActivity, HistoryItemListener arayüzünü uygular
 class MainActivity : AppCompatActivity(), HistoryItemListener {
     private val TAG = "MainActivity"
 
@@ -40,13 +40,16 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private lateinit var recyclerView: RecyclerView
     private lateinit var tvEmpty: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+    private lateinit var ivFavoritesToggle: ImageView // YENİ: Favoriler butonu değişkeni
 
     // Yardımcı sınıflar
     private lateinit var historyAdapter: HistoryAdapter
     private lateinit var historyStore: HistoryStore
     private lateinit var controlConfig: ControlConfig
 
-    // Android 13+ Bildirim İzni Launcher'ı
+    // Durum tutucu
+    private var isShowingFavorites = false
+
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -116,35 +119,72 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     // --- Helper Fonksiyonlar ---
 
     private fun setupUI() {
+        // Layout bileşenlerini bul
         recyclerView = findViewById(R.id.recycler_view_history)
         tvEmpty = findViewById(R.id.tv_empty_history)
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
+        ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle) // YENİ: Buton ataması
 
+        // RecyclerView Kurulumu
         historyAdapter = HistoryAdapter(emptyList(), this)
         recyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
         }
 
-        swipeRefreshLayout.setOnRefreshListener {
+        // FAVORİLER BUTONU TIKLAMA MANTIĞI BURADA
+        ivFavoritesToggle.setOnClickListener {
+            // Durumu tersine çevir
+            isShowingFavorites = !isShowingFavorites
+            // İkonu ve listeyi güncelle
+            updateFavoritesToggleUI()
             loadHistory()
+        }
+
+        // Swipe-to-Refresh ve Config çekme
+        swipeRefreshLayout.setOnRefreshListener {
             fetchRemoteConfig()
         }
 
+        // İlk yüklemede UI'ı ayarla
+        updateFavoritesToggleUI()
         loadHistory()
     }
+
+    // YENİ: Favori Butonunun Görünümünü Yöneten Fonksiyon
+    private fun updateFavoritesToggleUI() {
+        if (isShowingFavorites) {
+            // Favoriler gösteriliyorsa, dolu kalp ikonu
+            ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_filled)
+            ivFavoritesToggle.contentDescription = "Tüm Geçmişi Göster"
+            Toast.makeText(this, "Favori Anılar Filtrelendi.", Toast.LENGTH_SHORT).show()
+        } else {
+            // Tüm anılar gösteriliyorsa, boş kalp ikonu
+            ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_border)
+            ivFavoritesToggle.contentDescription = "Favorileri Göster"
+        }
+    }
+
 
     private fun loadHistory() {
         swipeRefreshLayout.isRefreshing = true
 
-        val history = historyStore.getHistory()
-        historyAdapter.updateList(history)
+        val allHistory = historyStore.getHistory()
+
+        // LİSTEYİ FİLTRELEME MANTIĞI BURADA
+        val displayList = if (isShowingFavorites) {
+            allHistory.filter { it.isPinned } // Sadece favori (isPinned) olanları göster
+        } else {
+            allHistory // Tüm geçmişi göster
+        }
+
+        historyAdapter.updateList(displayList) // Filtrelenmiş listeyi adaptöre gönder
 
         val config = controlConfig.getLocalConfig()
         updateUiTexts(config)
 
         swipeRefreshLayout.isRefreshing = false
-        tvEmpty.visibility = if (history.isEmpty()) View.VISIBLE else View.GONE
+        tvEmpty.visibility = if (displayList.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun fetchRemoteConfig() {
