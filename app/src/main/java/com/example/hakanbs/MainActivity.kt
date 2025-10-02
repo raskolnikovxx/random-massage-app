@@ -28,12 +28,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
+import android.widget.LinearLayout // Yeni notlar için eklendi
+import android.widget.ScrollView // Yeni notlar için eklendi
+import java.text.SimpleDateFormat // Not tarihleri için
+import java.util.Date // Not tarihleri için
+import java.util.Locale // Not tarihleri için
+import android.graphics.Typeface // Font stili için
 
-// MainActivity, HistoryItemListener arayüzünü uygular
+
 class MainActivity : AppCompatActivity(), HistoryItemListener {
     private val TAG = "MainActivity"
 
-    // Sabitler
     private val POST_NOTIFICATIONS_PERMISSION_REQUEST_CODE = 100
     private val PREFS_NAME = "AppPrefs"
     private val PREF_ALARM_DIALOG_SHOWN = "alarm_dialog_shown"
@@ -42,17 +47,15 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private lateinit var recyclerView: RecyclerView
     private lateinit var tvEmpty: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
-    private lateinit var ivFavoritesToggle: ImageView // Favori filtresi butonu
+    private lateinit var ivFavoritesToggle: ImageView
 
     // Yardımcı sınıflar
     private lateinit var historyAdapter: HistoryAdapter
     private lateinit var historyStore: HistoryStore
     private lateinit var controlConfig: ControlConfig
 
-    // Durum tutucu
     private var isShowingFavorites = false
 
-    // Android 13+ Bildirim İzni Launcher'ı
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -65,8 +68,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     // --- HistoryItemListener Uygulamaları ---
 
+    // onCommentClicked metodu artık List<Note> yapısını çağıracak
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
-        showCommentDialog(historyId, originalMessage, currentComment)
+        val history = historyStore.getHistory().find { it.id == historyId }
+        val existingNotes = history?.comments ?: emptyList()
+
+        showNoteEntryDialog(historyId, originalMessage, existingNotes) // Yeni metot çağrıldı
     }
 
     override fun onReactClicked(history: NotificationHistory, emoji: String) {
@@ -90,7 +97,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     }
 
     override fun onImageClicked(imageUrl: String) {
-        // Full screen görsel açma Intent'i
         val intent = Intent(this, FullscreenMediaActivity::class.java).apply {
             putExtra(FullscreenMediaActivity.EXTRA_MEDIA_URL, imageUrl)
         }
@@ -103,18 +109,15 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Servis başlatma
         DailySchedulerWorker.enqueueWork(this)
         historyStore = HistoryStore(this)
         controlConfig = ControlConfig(this)
 
         setupUI()
 
-        // İzinleri iste
         requestNotificationPermission()
         checkAlarmPermission()
 
-        // Planlama ve Senkronizasyonu başlat
         SyncRemoteWorker.schedule(this)
         startInitialSync()
 
@@ -129,46 +132,38 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     // --- Helper Fonksiyonlar ---
 
     private fun setupUI() {
-        // Layout bileşenlerini bul
         recyclerView = findViewById(R.id.recycler_view_history)
         tvEmpty = findViewById(R.id.tv_empty_history)
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
-        ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle) // Favoriler butonu ataması
+        ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle)
 
-        // RecyclerView Kurulumu
         historyAdapter = HistoryAdapter(emptyList(), this)
         recyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
         }
 
-        // Favoriler Butonu Tıklama Mantığı
         ivFavoritesToggle.setOnClickListener {
             isShowingFavorites = !isShowingFavorites
             updateFavoritesToggleUI()
             loadHistory()
         }
 
-        // Swipe-to-Refresh ve Config çekme
         swipeRefreshLayout.setOnRefreshListener {
             loadHistory()
             fetchRemoteConfig()
         }
 
-        // İlk yüklemede UI'ı ayarla
         updateFavoritesToggleUI()
         loadHistory()
     }
 
-    // Favori Butonunun Görünümünü Yöneten Fonksiyon
     private fun updateFavoritesToggleUI() {
         if (isShowingFavorites) {
-            // Favoriler gösteriliyorsa, dolu kalp ikonu
             ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_filled)
             ivFavoritesToggle.contentDescription = "Tüm Geçmişi Göster"
             Toast.makeText(this, "Favori Anılar Filtrelendi.", Toast.LENGTH_SHORT).show()
         } else {
-            // Tüm anılar gösteriliyorsa, boş kalp ikonu
             ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_border)
             ivFavoritesToggle.contentDescription = "Favorileri Göster"
         }
@@ -180,14 +175,13 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
         val allHistory = historyStore.getHistory()
 
-        // LİSTEYİ FİLTRELEME MANTIĞI
         val displayList = if (isShowingFavorites) {
-            allHistory.filter { it.isPinned } // Sadece favori olanları göster
+            allHistory.filter { it.isPinned }
         } else {
-            allHistory // Tüm geçmişi göster
+            allHistory
         }
 
-        historyAdapter.updateList(displayList) // Filtrelenmiş listeyi adaptöre gönder
+        historyAdapter.updateList(displayList)
 
         val config = controlConfig.getLocalConfig()
         updateUiTexts(config)
@@ -221,29 +215,68 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         tvEmpty.text = config.emptyMessage
     }
 
-    private fun showCommentDialog(historyId: Long, originalMessage: String, currentComment: String?) {
-        val input = EditText(this).apply {
-            setText(currentComment)
-            hint = "Eşinize özel bir not..."
-            setLines(3)
+    // YENİ VE NİHAİ DİYALOG FONKSİYONU: Not Listesini Yönetir
+    private fun showNoteEntryDialog(historyId: Long, originalMessage: String, existingNotes: List<Note>) {
+        val dateFormat = SimpleDateFormat("HH:mm dd/MM", Locale.getDefault())
+
+        // Ana Konteyner
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 40, 40, 40)
         }
 
+        // 1. MEVCUT NOTLARI GÖSTER (Sıralı)
+        if (existingNotes.isNotEmpty()) {
+            val historyTitle = TextView(this).apply {
+                text = "Önceki Notlar (${existingNotes.size}):"
+                textSize = 16f
+                setTypeface(null, Typeface.BOLD)
+                setPadding(0, 0, 0, 10)
+            }
+            container.addView(historyTitle)
+
+            // Tüm notları listeler (en yenisi üstte olmalı)
+            existingNotes.forEach { note ->
+                val noteView = TextView(this).apply {
+                    text = "(${dateFormat.format(Date(note.timestamp))}) ${note.text}"
+                    textSize = 14f
+                    setPadding(5, 5, 5, 5)
+                    setBackgroundColor(ContextCompat.getColor(context, R.color.purple_200))
+                }
+                container.addView(noteView)
+            }
+
+            val separator = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2).apply { topMargin = 20 }
+                setBackgroundColor(ContextCompat.getColor(context, R.color.black))
+            }
+            container.addView(separator)
+        }
+
+        // 2. YENİ NOT GİRİŞ ALANI
+        val input = EditText(this).apply {
+            hint = "Eşinize yeni bir not ekleyin (Silinemez)..."
+            setLines(3)
+        }
+        container.addView(input)
+
+        // Ekranın kaydırılabilir olması için ScrollView'e ekle
+        val dialogView = ScrollView(this).apply { addView(container) }
+
         AlertDialog.Builder(this)
-            .setTitle("Not Ekle / Düzenle")
-            .setMessage("Anı: \"$originalMessage\"")
-            .setView(input)
-            .setPositiveButton("Kaydet") { _, _ ->
+            .setTitle("Not Ekle (Anı: \"$originalMessage\")")
+            .setView(dialogView)
+            .setPositiveButton("Kaydet ve Kapat") { _, _ ->
                 val newComment = input.text.toString()
                 if (newComment.isNotBlank()) {
                     CoroutineScope(Dispatchers.IO).launch {
-                        historyStore.updateHistoryItem(historyId, newComment = newComment)
+                        // YENİ FONKSİYON KULLANILDI: Notu listeye ekle
+                        historyStore.addNoteToHistoryItem(historyId, newComment)
                         withContext(Dispatchers.Main) {
                             loadHistory()
-                            Toast.makeText(this@MainActivity, "Not kaydedildi.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Yeni not kaydedildi.", Toast.LENGTH_SHORT).show()
                         }
                     }
-                } else {
-                    Toast.makeText(this, "Not boş bırakılamaz.", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("İptal", null)

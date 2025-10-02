@@ -12,7 +12,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-// UYARI: HistoryItemListener arayüz tanımı BURADA OLMAMALIDIR (Harici dosyadan gelir)
+// UYARI: HistoryItemListener arayüz tanımı BURADA OLMAMALIDIR (Harici dosyadan gelir, bu kurala uyulmuştur.)
 
 class HistoryAdapter(
     private var historyList: List<NotificationHistory>,
@@ -53,8 +53,8 @@ class HistoryAdapter(
         private val tvReaction: TextView = itemView.findViewById(R.id.tv_history_reaction)
         private val ivHeart: ImageView = itemView.findViewById(R.id.iv_react_heart)
         private val ivFavorite: ImageView = itemView.findViewById(R.id.iv_favorite_toggle)
-        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment) // YORUM BUTONU
-        private val tvComment: TextView = itemView.findViewById(R.id.tv_comment_text)
+        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment)
+        private val tvComment: TextView = itemView.findViewById(R.id.tv_comment_text) // YORUM GÖSTERİMİ İÇİN KULLANILIR
 
         fun bind(history: NotificationHistory) {
             tvTime.text = dateFormat.format(Date(history.time))
@@ -80,7 +80,16 @@ class HistoryAdapter(
                 if (history.isPinned) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
             )
 
-            // --- TIKLAMA OLAYLARI (YORUM BUTONU BURADA AKTİF EDİLİYOR) ---
+            // YENİ: Yorum Gösterimi (Listeden son yorumu alarak veya boş değilse göster)
+            if (history.comments.isNotEmpty()) {
+                // En son yorumu gösterir
+                tvComment.text = "Not: ${history.comments.firstOrNull()?.text ?: "Çoklu Not Var"}"
+                tvComment.visibility = View.VISIBLE
+            } else {
+                tvComment.visibility = View.GONE
+            }
+
+            // --- TIKLAMA OLAYLARI ---
 
             ivFavorite.setOnClickListener {
                 listener.onFavoriteToggled(history, !history.isPinned)
@@ -90,13 +99,14 @@ class HistoryAdapter(
                 listener.onReactClicked(history, "❤️")
             }
 
-            // YENİ: Yorum Ekle Butonu Aktifleştirildi
+            // YORUM EKLE BUTONU AKTİF EDİLDİ
             ivAddComment.setOnClickListener {
                 // Tıklama olayını MainActivity'ye ilet
-                listener.onCommentClicked(history.id, history.message, history.comment)
+                // Not: history.comment yerine artık null gönderiyoruz, çünkü MainAcitivity List<Note>'u kendisi çekmeli
+                listener.onCommentClicked(history.id, history.message, null)
             }
 
-            // Görsel Yükleme ve Tıklama
+            // Görsel Yükleme ve Tıklama (Değişmedi)
             history.imageUrl?.let { url ->
                 if (url.isNotEmpty()) {
                     ivImage.visibility = View.VISIBLE
