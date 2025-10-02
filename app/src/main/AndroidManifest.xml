@@ -15,6 +15,15 @@
         android:theme="@style/Theme.Hakanbs"
         tools:targetApi="34">
 
+
+
+
+        <activity
+            android:name=".FullscreenMediaActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -22,16 +22,18 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkManager
 import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.ImageView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
-import android.widget.ImageView // ImageView sınıfı için
 
+// MainActivity, HistoryItemListener arayüzünü uygular
 class MainActivity : AppCompatActivity(), HistoryItemListener {
     private val TAG = "MainActivity"
 
+    // Sabitler
     private val POST_NOTIFICATIONS_PERMISSION_REQUEST_CODE = 100
     private val PREFS_NAME = "AppPrefs"
     private val PREF_ALARM_DIALOG_SHOWN = "alarm_dialog_shown"
@@ -40,7 +42,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private lateinit var recyclerView: RecyclerView
     private lateinit var tvEmpty: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
-    private lateinit var ivFavoritesToggle: ImageView // YENİ: Favoriler butonu değişkeni
+    private lateinit var ivFavoritesToggle: ImageView // Favori filtresi butonu
 
     // Yardımcı sınıflar
     private lateinit var historyAdapter: HistoryAdapter
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     // Durum tutucu
     private var isShowingFavorites = false
 
+    // Android 13+ Bildirim İzni Launcher'ı
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -87,7 +90,11 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     }
 
     override fun onImageClicked(imageUrl: String) {
-        Toast.makeText(this, "Görsel Tıklandı: $imageUrl", Toast.LENGTH_SHORT).show()
+        // Full screen görsel açma Intent'i
+        val intent = Intent(this, FullscreenMediaActivity::class.java).apply {
+            putExtra(FullscreenMediaActivity.EXTRA_MEDIA_URL, imageUrl)
+        }
+        startActivity(intent)
     }
     // --- Listener Metotları Bitti ---
 
@@ -96,15 +103,18 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Servis başlatma
         DailySchedulerWorker.enqueueWork(this)
         historyStore = HistoryStore(this)
         controlConfig = ControlConfig(this)
 
         setupUI()
 
+        // İzinleri iste
         requestNotificationPermission()
         checkAlarmPermission()
 
+        // Planlama ve Senkronizasyonu başlat
         SyncRemoteWorker.schedule(this)
         startInitialSync()
 
@@ -123,7 +133,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         recyclerView = findViewById(R.id.recycler_view_history)
         tvEmpty = findViewById(R.id.tv_empty_history)
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
-        ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle) // YENİ: Buton ataması
+        ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle) // Favoriler butonu ataması
 
         // RecyclerView Kurulumu
         historyAdapter = HistoryAdapter(emptyList(), this)
@@ -132,17 +142,16 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             adapter = historyAdapter
         }
 
-        // FAVORİLER BUTONU TIKLAMA MANTIĞI BURADA
+        // Favoriler Butonu Tıklama Mantığı
         ivFavoritesToggle.setOnClickListener {
-            // Durumu tersine çevir
             isShowingFavorites = !isShowingFavorites
-            // İkonu ve listeyi güncelle
             updateFavoritesToggleUI()
             loadHistory()
         }
 
         // Swipe-to-Refresh ve Config çekme
         swipeRefreshLayout.setOnRefreshListener {
+            loadHistory()
             fetchRemoteConfig()
         }
 
@@ -151,7 +160,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         loadHistory()
     }
 
-    // YENİ: Favori Butonunun Görünümünü Yöneten Fonksiyon
+    // Favori Butonunun Görünümünü Yöneten Fonksiyon
     private fun updateFavoritesToggleUI() {
         if (isShowingFavorites) {
             // Favoriler gösteriliyorsa, dolu kalp ikonu
@@ -171,9 +180,9 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
         val allHistory = historyStore.getHistory()
 
-        // LİSTEYİ FİLTRELEME MANTIĞI BURADA
+        // LİSTEYİ FİLTRELEME MANTIĞI
         val displayList = if (isShowingFavorites) {
-            allHistory.filter { it.isPinned } // Sadece favori (isPinned) olanları göster
+            allHistory.filter { it.isPinned } // Sadece favori olanları göster
         } else {
             allHistory // Tüm geçmişi göster
         }
@@ -245,7 +254,11 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    POST_NOTIFICATIONS_PERMISSION_REQUEST_CODE
+                )
             }
         }
     }
