@@ -29,7 +29,6 @@ object NotificationHelper {
 
     private fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Yüksek Öncelik (Bildirimin ekranda görünmesini sağlar)
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
                 description = "Shows remote-controlled sentimental messages."
@@ -59,7 +58,7 @@ object NotificationHelper {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(sentence.text)
             .setContentText(sentence.context ?: "Yeni bir anı!")
-            .setPriority(NotificationCompat.PRIORITY_MAX) // En yüksek öncelik
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVibrate(longArrayOf(100, 200, 300, 400))
             .setAutoCancel(true)
             .setContentIntent(mainPendingIntent)
@@ -71,6 +70,7 @@ object NotificationHelper {
         if (!imageUrl.isNullOrEmpty()) {
             CoroutineScope(Dispatchers.IO).launch {
                 val bitmap = loadBitmapFromUrl(context, imageUrl)
+
                 if (bitmap != null) {
                     builder.setStyle(
                         NotificationCompat.BigPictureStyle()
@@ -85,7 +85,7 @@ object NotificationHelper {
         }
     }
 
-    // YENİ FONKSİYON: Tüm Aksiyon Butonlarını Ekler
+    // Tüm Aksiyon Butonlarını Ekler
     private fun addActions(context: Context, builder: NotificationCompat.Builder, historyId: Long) {
         // Kalp Tepkisi
         val reactIntent = Intent(context, ActionReceiver::class.java).apply {
@@ -97,19 +97,28 @@ object NotificationHelper {
         builder.addAction(R.drawable.ic_react_heart, "Sevdim", reactPendingIntent)
 
         // Yorum Butonu (RemoteInput)
+        val replyLabel = "Yorum Yaz"
+
+        val remoteInput: RemoteInput = RemoteInput.Builder(AlarmReceiver.Companion.KEY_TEXT_REPLY).run {
+            setLabel(replyLabel)
+            build()
+        }
+
         val replyIntent = Intent(context, CommentReceiver::class.java).apply {
             action = AlarmReceiver.Companion.ACTION_COMMENT
             putExtra(AlarmReceiver.Companion.EXTRA_HISTORY_ID, historyId)
         }
-        val replyPendingIntent = PendingIntent.getBroadcast(context, (historyId + 300).toInt(), replyIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val remoteInput: RemoteInput = RemoteInput.Builder(AlarmReceiver.Companion.KEY_TEXT_REPLY).run {
-            setLabel("Yorum Yaz")
-            build()
-        }
+        // *** DÜZELTME BURADA YAPILDI ***
+        val replyPendingIntent = PendingIntent.getBroadcast(
+            context,
+            (historyId + 300).toInt(),
+            replyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
 
         val action: NotificationCompat.Action =
-            NotificationCompat.Action.Builder(R.drawable.ic_comment, "Yorum Yaz", replyPendingIntent)
+            NotificationCompat.Action.Builder(R.drawable.ic_comment, replyLabel, replyPendingIntent)
                 .addRemoteInput(remoteInput)
                 .build()
 
@@ -122,7 +131,7 @@ object NotificationHelper {
         notificationManager?.notify(notificationId.toInt(), builder.build())
     }
 
-    // Coil kullanarak URL'den Bitmap yükler
+    // Görsel Yükleme Metodu
     private suspend fun loadBitmapFromUrl(context: Context, url: String): Bitmap? =
         suspendCancellableCoroutine { continuation ->
             val imageLoader = ImageLoader(context)
