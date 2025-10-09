@@ -28,62 +28,59 @@ class HistoryStore(context: Context) {
 
     // Geçmişi güncelleyen temel fonksiyon (reaksiyon ve sabitleme için)
     fun updateHistoryItem(historyId: Long, newReaction: String? = null, newPinState: Boolean? = null) {
-        val currentHistory = getHistory().toMutableList()
-        val index = currentHistory.indexOfFirst { it.id == historyId }
+        var updatedItemForFirestore: NotificationHistory? = null
+        synchronized(this) {
+            val currentHistory = getHistory().toMutableList()
+            val index = currentHistory.indexOfFirst { it.id == historyId }
 
-        if (index != -1) {
-            val oldItem = currentHistory[index]
-
-            // 1. Yerel Veriyi Güncelle
-            val updatedItem = oldItem.copy(
-                reaction = newReaction ?: oldItem.reaction,
-                isPinned = newPinState ?: oldItem.isPinned
-                // comments listesi burada değişmez
-            )
-            currentHistory[index] = updatedItem
-            saveHistory(currentHistory)
-
-            // 2. FIREBASE'E GÜNCELLEMEYİ GÖNDER
-            sendToFirestore(updatedItem)
-        }
-    }
-
-    // YENİ/KRİTİK FONKSİYON: Yeni notu listeye ekler (silinmezlik kuralı)
-    fun addNoteToHistoryItem(historyId: Long, noteText: String) {
-        val currentHistory = getHistory().toMutableList()
-        val index = currentHistory.indexOfFirst { it.id == historyId }
-
-        if (index != -1) {
-            val oldItem = currentHistory[index]
-
-            // Yeni not objesi oluşturuluyor ve listeye ekleniyor
-            val newNote = Note(text = noteText, timestamp = System.currentTimeMillis())
-            val updatedNotes = oldItem.comments.toMutableList().apply {
-                add(0, newNote) // En yeni not en üste
+            if (index != -1) {
+                val oldItem = currentHistory[index]
+                val updatedItem = oldItem.copy(
+                    reaction = newReaction ?: oldItem.reaction,
+                    isPinned = newPinState ?: oldItem.isPinned
+                )
+                currentHistory[index] = updatedItem
+                saveHistory(currentHistory)
+                updatedItemForFirestore = updatedItem
             }
-
-            // 1. Yerel Veriyi Güncelle
-            val updatedItem = oldItem.copy(
-                comments = updatedNotes // YORUM LİSTESİ ATANDI
-            )
-            currentHistory[index] = updatedItem
-            saveHistory(currentHistory)
-
-            // 2. FIREBASE'E GÜNCELLEMEYİ GÖNDER
-            sendToFirestore(updatedItem)
         }
+        updatedItemForFirestore?.let { sendToFirestore(it) }
     }
 
+    // Yeni notu listeye ekler
+    fun addNoteToHistoryItem(historyId: Long, noteText: String) {
+        var updatedItemForFirestore: NotificationHistory? = null
+        synchronized(this) {
+            val currentHistory = getHistory().toMutableList()
+            val index = currentHistory.indexOfFirst { it.id == historyId }
+
+            if (index != -1) {
+                val oldItem = currentHistory[index]
+                val newNote = Note(text = noteText, timestamp = System.currentTimeMillis())
+                val updatedNotes = oldItem.comments.toMutableList().apply {
+                    add(0, newNote) // En yeni not en üste
+                }
+                val updatedItem = oldItem.copy(
+                    comments = updatedNotes
+                )
+                currentHistory[index] = updatedItem
+                saveHistory(currentHistory)
+                updatedItemForFirestore = updatedItem
+            }
+        }
+        updatedItemForFirestore?.let { sendToFirestore(it) }
+    }
 
     fun addNotificationToHistory(history: NotificationHistory) {
-        val currentHistory = getHistory().toMutableList()
-        currentHistory.add(0, history)
+        synchronized(this) {
+            val currentHistory = getHistory().toMutableList()
+            currentHistory.add(0, history)
 
-        if (currentHistory.size > 100) {
-            currentHistory.subList(100, currentHistory.size).clear()
+            if (currentHistory.size > 100) {
+                currentHistory.subList(100, currentHistory.size).clear()
+            }
+            saveHistory(currentHistory)
         }
-        saveHistory(currentHistory)
-
         sendToFirestore(history)
     }
 
@@ -92,7 +89,7 @@ class HistoryStore(context: Context) {
         historyPrefs.edit().putString(HISTORY_LIST_KEY, json).apply()
     }
 
-    // --- Firestore Yazma Mantığı (Değişmedi) ---
+    // --- Firestore Yazma Mantığı ---
 
     private fun sendToFirestore(history: NotificationHistory) {
         val firestoreItem = FirestoreHistoryItem(
@@ -101,15 +98,18 @@ class HistoryStore(context: Context) {
             messageId = history.messageId,
             timestamp = history.time,
             reaction = history.reaction,
-            comments = history.comments, // YORUM LİSTESİ
+            comments = history.comments,
             isPinned = history.isPinned
         )
-        // ... (Firestore yazma kodları aynı) ...
+        firestore.collection("history")
+            .document("${deviceId}_${history.id}")
+            .set(firestoreItem)
+            .addOnSuccessListener { Log.d(TAG, "History item ${history.id} synced to Firestore.") }
+            .addOnFailureListener { e -> Log.w(TAG, "Error syncing item ${history.id} to Firestore", e) }
     }
 
-    // --- Seen Store (Görülenler) İşlemleri (AlarmReceiver hatalarını çözer) ---
+    // --- Seen Store (Görülenler) İşlemleri ---
 
-    // Hata veren addSeenSentenceId metodu
     fun addSeenSentenceId(messageId: String) {
         val seenIds = getSeenSentenceIds().toMutableSet()
         seenIds.add(messageId)
@@ -117,7 +117,6 @@ class HistoryStore(context: Context) {
         seenPrefs.edit().putString(SEEN_ID_SET_KEY, json).apply()
     }
 
-    // Hata veren getSeenSentenceIds metodu
     fun getSeenSentenceIds(): Set<String> {
         val json = seenPrefs.getString(SEEN_ID_SET_KEY, null) ?: return emptySet()
         val type = object : TypeToken<Set<String>>() {}.type

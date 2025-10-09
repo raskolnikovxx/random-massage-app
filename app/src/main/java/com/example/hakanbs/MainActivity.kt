@@ -5,36 +5,36 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.SearchView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkManager
-import androidx.activity.result.contract.ActivityResultContracts
-import android.widget.ImageView
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.lifecycle.lifecycleScope
-import android.widget.LinearLayout // Diyalog için eklendi
-import android.widget.ScrollView  // Diyalog için eklendi
-import java.text.SimpleDateFormat // Not tarihleri için
-import java.util.Date // Not tarihleri için
-import java.util.Locale // Not tarihleri için
-import android.graphics.Typeface // Font stili için
-
 
 class MainActivity : AppCompatActivity(), HistoryItemListener {
     private val TAG = "MainActivity"
@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private lateinit var tvEmpty: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var ivFavoritesToggle: ImageView
+    private lateinit var searchView: SearchView
 
     // Yardımcı sınıflar
     private lateinit var historyAdapter: HistoryAdapter
@@ -69,22 +70,13 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     // --- HistoryItemListener Uygulamaları ---
 
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
-        // Yorum listesini çekip diyaloğa gönder
         val history = historyStore.getHistory().find { it.id == historyId }
-        val existingNotes = history?.comments ?: emptyList() // Yeni List<Note> yapısını kullanır
-
+        val existingNotes = history?.comments ?: emptyList()
         showNoteEntryDialog(historyId, originalMessage, existingNotes)
     }
 
-    override fun onReactClicked(history: NotificationHistory, emoji: String) {
-        val newReaction = if (history.reaction == emoji) null else emoji
-
-        CoroutineScope(Dispatchers.IO).launch {
-            historyStore.updateHistoryItem(history.id, newReaction = newReaction)
-            withContext(Dispatchers.Main) {
-                loadHistory()
-            }
-        }
+    override fun onReactClicked(history: NotificationHistory) {
+        showEmojiEntryDialog(history)
     }
 
     override fun onFavoriteToggled(history: NotificationHistory, isFavorite: Boolean) {
@@ -103,7 +95,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         startActivity(intent)
     }
     // --- Listener Metotları Bitti ---
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,6 +127,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         tvEmpty = findViewById(R.id.tv_empty_history)
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
         ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle)
+        searchView = findViewById(R.id.search_view)
+
+        val wheelIcon: ImageView = findViewById(R.id.iv_wheel)
+        wheelIcon.setOnClickListener {
+            startActivity(Intent(this, WheelActivity::class.java))
+        }
 
         historyAdapter = HistoryAdapter(emptyList(), this)
         recyclerView.apply {
@@ -154,49 +151,60 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             fetchRemoteConfig()
         }
 
+        setupSearchListener()
+
         updateFavoritesToggleUI()
         loadHistory()
+    }
+
+    private fun setupSearchListener() {
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                historyAdapter.filter(newText)
+                return true
+            }
+        })
     }
 
     private fun updateFavoritesToggleUI() {
         if (isShowingFavorites) {
             ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_filled)
             ivFavoritesToggle.contentDescription = "Tüm Geçmişi Göster"
-            Toast.makeText(this, "Favori Anılar Filtrelendi.", Toast.LENGTH_SHORT).show()
         } else {
             ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_border)
             ivFavoritesToggle.contentDescription = "Favorileri Göster"
         }
     }
 
-
     private fun loadHistory() {
         swipeRefreshLayout.isRefreshing = true
-
         val allHistory = historyStore.getHistory()
-
         val displayList = if (isShowingFavorites) {
             allHistory.filter { it.isPinned }
         } else {
             allHistory
         }
-
         historyAdapter.updateList(displayList)
 
+        val currentQuery = searchView.query.toString()
+        if (currentQuery.isNotEmpty()) {
+            historyAdapter.filter(currentQuery)
+        }
         val config = controlConfig.getLocalConfig()
         updateUiTexts(config)
-
         swipeRefreshLayout.isRefreshing = false
-        tvEmpty.visibility = if (displayList.isEmpty()) View.VISIBLE else View.GONE
+        tvEmpty.visibility = if (historyAdapter.itemCount == 0) View.VISIBLE else View.GONE
     }
 
     private fun fetchRemoteConfig() {
         lifecycleScope.launch(Dispatchers.IO) {
             controlConfig.fetchConfig()
-
             val config = controlConfig.getLocalConfig()
             Planner(this@MainActivity, config).scheduleAllNotifications()
-
             withContext(Dispatchers.Main) {
                 loadHistory()
             }
@@ -215,17 +223,37 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         tvEmpty.text = config.emptyMessage
     }
 
-    // YENİ VE NİHAİ DİYALOG FONKSİYONU: Not Listesini Yönetir
+    private fun showEmojiEntryDialog(history: NotificationHistory) {
+        val input = EditText(this).apply {
+            hint = "Bir emoji seçin..."
+            setText(history.reaction ?: "")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Tepkini Seç")
+            .setMessage("Klavyenizdeki emoji butonunu kullanarak bir tepki seçebilirsiniz.")
+            .setView(input)
+            .setPositiveButton("Kaydet") { _, _ ->
+                val newEmoji = input.text.toString().trim()
+                if (newEmoji.isNotBlank()) {
+                    val finalReaction = if (newEmoji == history.reaction) null else newEmoji
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        historyStore.updateHistoryItem(history.id, newReaction = finalReaction)
+                        withContext(Dispatchers.Main) {
+                            loadHistory()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("İptal", null)
+            .show()
+    }
+
     private fun showNoteEntryDialog(historyId: Long, originalMessage: String, existingNotes: List<Note>) {
         val dateFormat = SimpleDateFormat("HH:mm dd/MM", Locale.getDefault())
-
-        // Ana Konteyner
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 40, 40, 40)
         }
-
-        // 1. MEVCUT NOTLARI GÖSTER (Sıralı)
         if (existingNotes.isNotEmpty()) {
             val historyTitle = TextView(this).apply {
                 text = "Önceki Notlar (${existingNotes.size}):"
@@ -234,35 +262,26 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
                 setPadding(0, 0, 0, 10)
             }
             container.addView(historyTitle)
-
-            // Tüm notları listeler (en yenisi üstte olmalı)
             existingNotes.forEach { note ->
                 val noteView = TextView(this).apply {
                     text = "(${dateFormat.format(Date(note.timestamp))}) ${note.text}"
                     textSize = 14f
                     setPadding(5, 5, 5, 5)
-                    setBackgroundColor(ContextCompat.getColor(context, R.color.purple_200))
                 }
                 container.addView(noteView)
             }
-
             val separator = View(this).apply {
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2).apply { topMargin = 20 }
                 setBackgroundColor(ContextCompat.getColor(context, R.color.black))
             }
             container.addView(separator)
         }
-
-        // 2. YENİ NOT GİRİŞ ALANI
         val input = EditText(this).apply {
             hint = "Eşinize yeni bir not ekleyin (Silinemez)..."
             setLines(3)
         }
         container.addView(input)
-
-        // Ekranın kaydırılabilir olması için ScrollView'e ekle
         val dialogView = ScrollView(this).apply { addView(container) }
-
         AlertDialog.Builder(this)
             .setTitle("Not Ekle (Anı: \"$originalMessage\")")
             .setView(dialogView)
@@ -270,7 +289,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
                 val newComment = input.text.toString()
                 if (newComment.isNotBlank()) {
                     CoroutineScope(Dispatchers.IO).launch {
-                        // YORUMU KAYDETMEK İÇİN YENİ METOT KULLANILDI
                         historyStore.addNoteToHistoryItem(historyId, newComment)
                         withContext(Dispatchers.Main) {
                             loadHistory()
@@ -282,7 +300,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             .setNegativeButton("İptal", null)
             .show()
     }
-
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -298,18 +315,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     private fun checkAlarmPermission() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-
             if (!alarmManager.canScheduleExactAlarms() && !prefs.getBoolean(PREF_ALARM_DIALOG_SHOWN, false)) {
-
                 prefs.edit().putBoolean(PREF_ALARM_DIALOG_SHOWN, true).apply()
-
                 AlertDialog.Builder(this)
                     .setTitle("BİLGİLENDİRME")
                     .setMessage("Uygulama tam zamanında bildirim göndermek için izin isterse onaylayın. Aksi takdirde, bildirimleriniz birkaç dakika gecikebilir.")
-                    .setPositiveButton("Anladım") { _, _ -> /* Kapat */ }
+                    .setPositiveButton("Anladım") { _, _ -> }
                     .show()
             }
         }

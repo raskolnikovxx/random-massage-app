@@ -54,5 +54,6 @@ dependencies {
     implementation("io.coil-kt:coil:2.6.0")
     implementation("io.coil-kt:coil-base:2.6.0")
 
+
     // Test dependencies...
 }
