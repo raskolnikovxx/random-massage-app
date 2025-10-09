@@ -1,20 +1,23 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
-    id("com.google.gms.google-services") // Firebase plugin'ini uygula
+    id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.example.hakanbs" // YENİ VE DOĞRU PAKET ADI
+    namespace = "com.example.hakanbs"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.hakanbs" // YENİ VE DOĞRU PAKET ADI
+        applicationId = "com.example.hakanbs"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    buildFeatures {
+        viewBinding = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -34,10 +37,12 @@ dependencies {
     implementation(libs.androidx.recyclerview)
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
+
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 
-    // Test kütüphaneleri: Hata veren 'junit', 'Test', 'assertEquals' referanslarını çözer.
+    // Test kütüphaneleri
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
@@ -53,7 +58,4 @@ dependencies {
     // Coil
     implementation("io.coil-kt:coil:2.6.0")
     implementation("io.coil-kt:coil-base:2.6.0")
-
-
-    // Test dependencies...
 }

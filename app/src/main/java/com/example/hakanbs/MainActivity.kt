@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private lateinit var recyclerView: RecyclerView
     private lateinit var tvEmpty: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
-    private lateinit var ivFavoritesToggle: ImageView
+    private lateinit var tvFavoritesToggle: TextView // DEĞİŞİKLİK BURADA: ImageView -> TextView
     private lateinit var searchView: SearchView
 
     // Yardımcı sınıflar
@@ -126,8 +126,10 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         recyclerView = findViewById(R.id.recycler_view_history)
         tvEmpty = findViewById(R.id.tv_empty_history)
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
-        ivFavoritesToggle = findViewById(R.id.iv_favorites_toggle)
         searchView = findViewById(R.id.search_view)
+
+        // DEĞİŞİKLİK BURADA: ivFavoritesToggle yerine tvFavoritesToggle kullanılıyor
+        tvFavoritesToggle = findViewById(R.id.tv_favorites_toggle)
 
         val wheelIcon: ImageView = findViewById(R.id.iv_wheel)
         wheelIcon.setOnClickListener {
@@ -140,7 +142,8 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             adapter = historyAdapter
         }
 
-        ivFavoritesToggle.setOnClickListener {
+        // DEĞİŞİKLİK BURADA: Tıklama olayı tvFavoritesToggle'a bağlanıyor
+        tvFavoritesToggle.setOnClickListener {
             isShowingFavorites = !isShowingFavorites
             updateFavoritesToggleUI()
             loadHistory()
@@ -170,13 +173,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         })
     }
 
+    // DEĞİŞİKLİK BURADA: Fonksiyonun içeriği TextView'in rengini değiştirecek şekilde güncellendi
     private fun updateFavoritesToggleUI() {
         if (isShowingFavorites) {
-            ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_filled)
-            ivFavoritesToggle.contentDescription = "Tüm Geçmişi Göster"
+            tvFavoritesToggle.setTextColor(ContextCompat.getColor(this, R.color.purple_700))
         } else {
-            ivFavoritesToggle.setImageResource(R.drawable.ic_favorite_border)
-            ivFavoritesToggle.contentDescription = "Favorileri Göster"
+            tvFavoritesToggle.setTextColor(ContextCompat.getColor(this, android.R.color.black))
         }
     }
 
