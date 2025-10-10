@@ -127,8 +127,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         tvEmpty = findViewById(R.id.tv_empty_history)
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
         searchView = findViewById(R.id.search_view)
-
-        // DEĞİŞİKLİK BURADA: ivFavoritesToggle yerine tvFavoritesToggle kullanılıyor
         tvFavoritesToggle = findViewById(R.id.tv_favorites_toggle)
 
         val wheelIcon: ImageView = findViewById(R.id.iv_wheel)
@@ -136,13 +134,19 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             startActivity(Intent(this, WheelActivity::class.java))
         }
 
+        // YENİ EKLENEN BÖLÜM
+        val couponsButton: TextView = findViewById(R.id.tv_coupons)
+        couponsButton.setOnClickListener {
+            startActivity(Intent(this, CouponsActivity::class.java))
+        }
+        // --- BİTİŞ ---
+
         historyAdapter = HistoryAdapter(emptyList(), this)
         recyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
         }
 
-        // DEĞİŞİKLİK BURADA: Tıklama olayı tvFavoritesToggle'a bağlanıyor
         tvFavoritesToggle.setOnClickListener {
             isShowingFavorites = !isShowingFavorites
             updateFavoritesToggleUI()

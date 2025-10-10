@@ -24,7 +24,7 @@ class HistoryAdapter(
     }
 
     fun updateList(newList: List<NotificationHistory>) {
-        originalHistoryList = newList.sortedByDescending { it.isPinned }
+        originalHistoryList = newList // Sıralama kaldırıldı, liste geldiği gibi kabul ediliyor.
         filteredHistoryList = originalHistoryList.toMutableList()
         notifyDataSetChanged()
     }

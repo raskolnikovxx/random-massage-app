@@ -57,6 +57,7 @@
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:layout_marginStart="16dp"
+        android:visibility="gone"
         android:contentDescription="Tepki Ekle"
         android:src="@drawable/ic_react_heart"
         app:layout_constraintStart_toEndOf="@id/iv_favorite_toggle"

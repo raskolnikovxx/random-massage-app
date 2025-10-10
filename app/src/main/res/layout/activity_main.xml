@@ -27,17 +27,33 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <TextView
+            android:id="@+id/tv_coupons"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginEnd="8dp"
+            android:gravity="center"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="Kuponlar"
+            android:textColor="@android:color/black"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="@id/tv_favorites_toggle"
+            app:layout_constraintEnd_toStartOf="@id/tv_favorites_toggle"
+            app:layout_constraintTop_toTopOf="@id/tv_favorites_toggle" />
+
         <ImageView
             android:id="@+id/iv_wheel"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="44dp"
+            android:layout_height="43dp"
             android:layout_marginEnd="8dp"
             android:contentDescription="Karar Tekerleği"
             android:padding="4dp"
             android:src="@drawable/ic_wheel"
-            app:layout_constraintBottom_toBottomOf="@id/tv_favorites_toggle"
-            app:layout_constraintEnd_toStartOf="@id/tv_favorites_toggle"
-            app:layout_constraintTop_toTopOf="@id/tv_favorites_toggle" />
+            app:layout_constraintBottom_toBottomOf="@id/tv_coupons"
+            app:layout_constraintEnd_toStartOf="@id/tv_coupons"
+            app:layout_constraintTop_toTopOf="@id/tv_coupons" />
 
         <SearchView
             android:id="@+id/search_view"

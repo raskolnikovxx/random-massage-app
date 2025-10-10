@@ -38,7 +38,8 @@ data class RemoteConfig(
     val overrides: List<RemoteOverride> = emptyList(),
     val activityTitle: String = "Anılarımız",
     val emptyMessage: String = "Henüz anı yok...",
-    val decisionWheel: DecisionWheelOption = DecisionWheelOption()
+    val decisionWheel: DecisionWheelOption = DecisionWheelOption(),
+    val coupons: List<Coupon> = emptyList() // YENİ ALAN
 )
 
 data class NotificationHistory(
@@ -52,6 +53,12 @@ data class NotificationHistory(
     val reaction: String? = null,
     val comments: List<Note> = emptyList(),
     val isPinned: Boolean = false
+)
+
+data class Coupon(
+    val id: String = "",
+    val title: String = "",
+    val description: String = ""
 )
 
 data class FirestoreHistoryItem(
