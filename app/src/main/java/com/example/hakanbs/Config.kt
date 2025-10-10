@@ -19,7 +19,9 @@ data class RemoteSentence(
     val text: String = "",
     val isQuote: Boolean = false,
     val context: String? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val audioUrl: String? = null, // YENİ ALAN
+    val videoUrl: String? = null  // YENİ ALAN
 )
 
 data class RemoteOverride(
@@ -52,7 +54,9 @@ data class NotificationHistory(
     val context: String? = null,
     val reaction: String? = null,
     val comments: List<Note> = emptyList(),
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val audioUrl: String? = null,
+    val videoUrl: String? = null
 )
 
 data class Coupon(

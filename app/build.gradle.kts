@@ -36,6 +36,9 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.recyclerview)
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("com.github.chrisbanes:PhotoView:2.3.0")
+    implementation("com.google.android.exoplayer:exoplayer:2.19.1")
+    implementation("io.coil-kt:coil-gif:2.6.0") // BU SATIRI EKLEYİN
 
 
 

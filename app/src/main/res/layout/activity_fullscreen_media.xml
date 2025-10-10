@@ -7,23 +7,31 @@
     android:background="@android:color/black"
     tools:context=".FullscreenMediaActivity">
 
-    <ImageView
-        android:id="@+id/iv_fullscreen_media"
+    <com.github.chrisbanes.photoview.PhotoView
+        android:id="@+id/photo_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="fitCenter"
-        android:contentDescription="Tam Ekran Görsel" />
+        android:visibility="gone"
+        tools:visibility="visible"
+        android:contentDescription="Tam Ekran Yakınlaştırılabilir Görsel" />
+
+    <ImageView
+        android:id="@+id/gif_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:contentDescription="Tam Ekran Hareketli Görsel" />
 
     <ImageButton
         android:id="@+id/btn_close"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_margin="16dp"
-        android:src="@drawable/ic_close"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="Kapat"
-        app:layout_constraintTop_toTopOf="parent"
+        android:src="@drawable/ic_close"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:tint="@android:color/white" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

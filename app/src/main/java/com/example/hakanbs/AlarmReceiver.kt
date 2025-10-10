@@ -73,7 +73,10 @@ class AlarmReceiver : BroadcastReceiver() {
             message = selectedSentence.text,
             imageUrl = imageUrl,
             isQuote = selectedSentence.isQuote,
-            context = selectedSentence.context
+            context = selectedSentence.context,
+            audioUrl = selectedSentence.audioUrl,
+            videoUrl = selectedSentence.videoUrl
+
         )
         historyStore.addNotificationToHistory(history)
         return history

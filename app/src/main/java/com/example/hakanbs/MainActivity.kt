@@ -79,6 +79,20 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         showEmojiEntryDialog(history)
     }
 
+    override fun onVideoClicked(videoUrl: String) {
+        val intent = Intent(this, VideoPlayerActivity::class.java).apply {
+            putExtra("VIDEO_URL", videoUrl)
+        }
+        startActivity(intent)
+    }
+
+
+    override fun onDestroy() {
+        super.onDestroy()
+        historyAdapter.releasePlayer() // MediaPlayer'ı serbest bırak
+    }
+
+
     override fun onFavoriteToggled(history: NotificationHistory, isFavorite: Boolean) {
         CoroutineScope(Dispatchers.IO).launch {
             historyStore.updateHistoryItem(history.id, newPinState = isFavorite)
