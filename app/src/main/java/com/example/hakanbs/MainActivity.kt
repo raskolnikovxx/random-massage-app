@@ -43,19 +43,29 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     private val PREFS_NAME = "AppPrefs"
     private val PREF_ALARM_DIALOG_SHOWN = "alarm_dialog_shown"
 
-    // Layout bileşenleri
+    // Layout components
     private lateinit var recyclerView: RecyclerView
     private lateinit var tvEmpty: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
-    private lateinit var tvFavoritesToggle: TextView // DEĞİŞİKLİK BURADA: ImageView -> TextView
+    private lateinit var tvFavoritesToggle: TextView
     private lateinit var searchView: SearchView
 
-    // Yardımcı sınıflar
+    // Helper classes
     private lateinit var historyAdapter: HistoryAdapter
     private lateinit var historyStore: HistoryStore
     private lateinit var controlConfig: ControlConfig
 
     private var isShowingFavorites = false
+
+    // This launcher handles the result from CouponsActivity
+    private val couponsActivityLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Log.d(TAG, "Returned from CouponsActivity with result OK. Refreshing list.")
+            loadHistory()
+        }
+    }
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -63,11 +73,11 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         if (isGranted) {
             Log.d(TAG, "POST_NOTIFICATIONS granted.")
         } else {
-            Toast.makeText(this, "Bildirim izni olmadan alarm gelmeyebilir.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Notification permission is recommended.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // --- HistoryItemListener Uygulamaları ---
+    // --- HistoryItemListener Implementations ---
 
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
         val history = historyStore.getHistory().find { it.id == historyId }
@@ -86,13 +96,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         startActivity(intent)
     }
 
-
-    override fun onDestroy() {
-        super.onDestroy()
-        historyAdapter.releasePlayer() // MediaPlayer'ı serbest bırak
-    }
-
-
     override fun onFavoriteToggled(history: NotificationHistory, isFavorite: Boolean) {
         CoroutineScope(Dispatchers.IO).launch {
             historyStore.updateHistoryItem(history.id, newPinState = isFavorite)
@@ -108,7 +111,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
         startActivity(intent)
     }
-    // --- Listener Metotları Bitti ---
+    // --- End of Listener Methods ---
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -134,7 +137,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         loadHistory()
     }
 
-    // --- Helper Fonksiyonlar ---
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::historyAdapter.isInitialized) {
+            historyAdapter.releasePlayer()
+        }
+    }
+
+    // --- Helper Functions ---
 
     private fun setupUI() {
         recyclerView = findViewById(R.id.recycler_view_history)
@@ -143,17 +153,33 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         searchView = findViewById(R.id.search_view)
         tvFavoritesToggle = findViewById(R.id.tv_favorites_toggle)
 
+        val homepageIcon: ImageView = findViewById(R.id.tv_homepage)
+        homepageIcon.setOnClickListener {
+            isShowingFavorites = false
+            updateFavoritesToggleUI()
+            searchView.setQuery("", false)
+            searchView.clearFocus()
+            loadHistory()
+            Toast.makeText(this, "Filters cleared.", Toast.LENGTH_SHORT).show()
+        }
+
+        val snakeGameIcon: ImageView = findViewById(R.id.tv_snake_game)
+        snakeGameIcon.setOnClickListener {
+            startActivity(Intent(this, SnakeGameActivity::class.java))
+        }
+
+
         val wheelIcon: ImageView = findViewById(R.id.iv_wheel)
         wheelIcon.setOnClickListener {
             startActivity(Intent(this, WheelActivity::class.java))
         }
 
-        // YENİ EKLENEN BÖLÜM
         val couponsButton: TextView = findViewById(R.id.tv_coupons)
         couponsButton.setOnClickListener {
-            startActivity(Intent(this, CouponsActivity::class.java))
+            val intent = Intent(this, CouponsActivity::class.java)
+            couponsActivityLauncher.launch(intent)
         }
-        // --- BİTİŞ ---
+
 
         historyAdapter = HistoryAdapter(emptyList(), this)
         recyclerView.apply {
@@ -173,7 +199,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
 
         setupSearchListener()
-
         updateFavoritesToggleUI()
         loadHistory()
     }
@@ -191,7 +216,6 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         })
     }
 
-    // DEĞİŞİKLİK BURADA: Fonksiyonun içeriği TextView'in rengini değiştirecek şekilde güncellendi
     private fun updateFavoritesToggleUI() {
         if (isShowingFavorites) {
             tvFavoritesToggle.setTextColor(ContextCompat.getColor(this, R.color.purple_700))
@@ -245,14 +269,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     private fun showEmojiEntryDialog(history: NotificationHistory) {
         val input = EditText(this).apply {
-            hint = "Bir emoji seçin..."
+            hint = "Select an emoji..."
             setText(history.reaction ?: "")
         }
         AlertDialog.Builder(this)
-            .setTitle("Tepkini Seç")
-            .setMessage("Klavyenizdeki emoji butonunu kullanarak bir tepki seçebilirsiniz.")
+            .setTitle("Choose your reaction")
+            .setMessage("You can use the emoji button on your keyboard.")
             .setView(input)
-            .setPositiveButton("Kaydet") { _, _ ->
+            .setPositiveButton("Save") { _, _ ->
                 val newEmoji = input.text.toString().trim()
                 if (newEmoji.isNotBlank()) {
                     val finalReaction = if (newEmoji == history.reaction) null else newEmoji
@@ -264,7 +288,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
                     }
                 }
             }
-            .setNegativeButton("İptal", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -276,7 +300,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
         if (existingNotes.isNotEmpty()) {
             val historyTitle = TextView(this).apply {
-                text = "Önceki Notlar (${existingNotes.size}):"
+                text = "Previous Notes (${existingNotes.size}):"
                 textSize = 16f
                 setTypeface(null, Typeface.BOLD)
                 setPadding(0, 0, 0, 10)
@@ -292,32 +316,32 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             }
             val separator = View(this).apply {
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2).apply { topMargin = 20 }
-                setBackgroundColor(ContextCompat.getColor(context, R.color.black))
+                setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.black))
             }
             container.addView(separator)
         }
         val input = EditText(this).apply {
-            hint = "Eşinize yeni bir not ekleyin (Silinemez)..."
+            hint = "Add a new note to your partner (cannot be deleted)..."
             setLines(3)
         }
         container.addView(input)
         val dialogView = ScrollView(this).apply { addView(container) }
         AlertDialog.Builder(this)
-            .setTitle("Not Ekle (Anı: \"$originalMessage\")")
+            .setTitle("Add Note (Memory: \"$originalMessage\")")
             .setView(dialogView)
-            .setPositiveButton("Kaydet ve Kapat") { _, _ ->
+            .setPositiveButton("Save & Close") { _, _ ->
                 val newComment = input.text.toString()
                 if (newComment.isNotBlank()) {
                     CoroutineScope(Dispatchers.IO).launch {
                         historyStore.addNoteToHistoryItem(historyId, newComment)
                         withContext(Dispatchers.Main) {
                             loadHistory()
-                            Toast.makeText(this@MainActivity, "Yeni not kaydedildi.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "New note saved.", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
             }
-            .setNegativeButton("İptal", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -340,9 +364,9 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             if (!alarmManager.canScheduleExactAlarms() && !prefs.getBoolean(PREF_ALARM_DIALOG_SHOWN, false)) {
                 prefs.edit().putBoolean(PREF_ALARM_DIALOG_SHOWN, true).apply()
                 AlertDialog.Builder(this)
-                    .setTitle("BİLGİLENDİRME")
-                    .setMessage("Uygulama tam zamanında bildirim göndermek için izin isterse onaylayın. Aksi takdirde, bildirimleriniz birkaç dakika gecikebilir.")
-                    .setPositiveButton("Anladım") { _, _ -> }
+                    .setTitle("INFORMATION")
+                    .setMessage("Please approve if the app asks for permission to send notifications on time. Otherwise, your notifications may be delayed by a few minutes.")
+                    .setPositiveButton("Got it") { _, _ -> }
                     .show()
             }
         }
@@ -352,9 +376,9 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == POST_NOTIFICATIONS_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Bildirim izni alındı.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Notification permission granted.", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Bildirim izni olmadan alarm gelmeyebilir.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Notifications may not arrive without permission.", Toast.LENGTH_LONG).show()
             }
         }
     }

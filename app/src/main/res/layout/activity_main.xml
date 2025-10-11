@@ -11,11 +11,35 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <ImageView
+            android:id="@+id/tv_homepage"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_home"
+            android:contentDescription="Ana Sayfa"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <ImageView
+            android:id="@+id/tv_snake_game"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="16dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_snake"
+            android:contentDescription="Snake Oyunu"
+            app:layout_constraintStart_toEndOf="@id/tv_homepage"
+            app:layout_constraintTop_toTopOf="@id/tv_homepage" />
+
+
+        <!-- Sağ taraftaki butonlar -->
         <TextView
             android:id="@+id/tv_favorites_toggle"
             android:layout_width="wrap_content"
             android:layout_height="32dp"
-            android:layout_marginTop="16dp"
             android:layout_marginEnd="16dp"
             android:gravity="center"
             android:paddingStart="8dp"
@@ -25,7 +49,7 @@
             android:textSize="16sp"
             android:textStyle="bold"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="@id/tv_homepage" />
 
         <TextView
             android:id="@+id/tv_coupons"
@@ -39,40 +63,41 @@
             android:textColor="@android:color/black"
             android:textSize="16sp"
             android:textStyle="bold"
-            app:layout_constraintBottom_toBottomOf="@id/tv_favorites_toggle"
             app:layout_constraintEnd_toStartOf="@id/tv_favorites_toggle"
-            app:layout_constraintTop_toTopOf="@id/tv_favorites_toggle" />
+            app:layout_constraintTop_toTopOf="@id/tv_homepage" />
 
         <ImageView
             android:id="@+id/iv_wheel"
-            android:layout_width="44dp"
-            android:layout_height="43dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:layout_marginEnd="8dp"
             android:contentDescription="Karar Tekerleği"
             android:padding="4dp"
             android:src="@drawable/ic_wheel"
-            app:layout_constraintBottom_toBottomOf="@id/tv_coupons"
             app:layout_constraintEnd_toStartOf="@id/tv_coupons"
-            app:layout_constraintTop_toTopOf="@id/tv_coupons" />
+            app:layout_constraintTop_toTopOf="@id/tv_homepage"
+            app:layout_constraintBottom_toBottomOf="@id/tv_homepage" />
 
+        <!-- Arama alanı -->
         <SearchView
             android:id="@+id/search_view"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
             android:iconifiedByDefault="false"
             android:queryHint="Anılarda Ara..."
-            app:layout_constraintBottom_toBottomOf="@id/iv_wheel"
-            app:layout_constraintEnd_toStartOf="@id/iv_wheel"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="@id/iv_wheel" />
+            app:layout_constraintTop_toBottomOf="@id/tv_homepage" />
 
+        <!-- RecyclerView ve boş durum mesajı -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recycler_view_history"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:clipToPadding="false"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -94,6 +119,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="@id/recycler_view_history"
             tools:text="Henüz anı yok..." />
+
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
