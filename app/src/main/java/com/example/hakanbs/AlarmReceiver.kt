@@ -1,14 +1,12 @@
 package com.example.hakanbs
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.work.CoroutineWorker
-import androidx.work.WorkerParameters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import android.content.BroadcastReceiver
 
 class AlarmReceiver : BroadcastReceiver() {
     private val TAG = "AlarmReceiver"
@@ -28,9 +26,10 @@ class AlarmReceiver : BroadcastReceiver() {
 
             val config = ControlConfig(context).getLocalConfig()
             val historyStore = HistoryStore(context)
-            val messageId = intent.getStringExtra("EXTRA_MESSAGE_ID")
 
-            // 1. Mesajı seç (Bu mesajın içinde artık imageUrl de var)
+            val messageId = intent.getStringExtra("EXTRA_MESSAGE_ID")
+            val forcedImageUrl = intent.getStringExtra("EXTRA_IMAGE_URL")
+
             val selectedSentence = findAndSelectSentence(config, historyStore, messageId)
 
             if (selectedSentence == null) {
@@ -38,20 +37,20 @@ class AlarmReceiver : BroadcastReceiver() {
                 return@launch
             }
 
-            // *** BURASI DEĞİŞTİ: Fotoğrafı doğrudan seçilen cümlenin içinden alıyoruz ***
-            val imageUrl = selectedSentence.imageUrl
+            // imageUrl'i artık doğrudan cümlenin kendisinden alıyoruz
+            val imageUrl = forcedImageUrl ?: selectedSentence.imageUrl
 
-            // 2. Geçmişe kaydet
+            // Önce geçmişe kaydedelim, ID alalım
             val notificationHistory = saveAndGetHistory(historyStore, selectedSentence, imageUrl)
             val historyId = notificationHistory.id
 
-            // 3. Bildirimi göster
+            // Bildirimi göster
             NotificationHelper.showNotification(context, selectedSentence, imageUrl, historyId)
 
-            // 4. Cümlenin ID'sini "görüldü" olarak işaretle
+            // Cümlenin ID'sini "görüldü" olarak işaretle
             historyStore.addSeenSentenceId(selectedSentence.id)
 
-            // 5. Sonraki alarmı planla
+            // Sonraki alarmı planla
             Planner(context, config).scheduleAllNotifications()
         }
     }
@@ -66,6 +65,7 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    // --- DÜZELTİLMİŞ FONKSİYON ---
     private fun saveAndGetHistory(historyStore: HistoryStore, selectedSentence: RemoteSentence, imageUrl: String?): NotificationHistory {
         val history = NotificationHistory(
             time = System.currentTimeMillis(),
@@ -74,9 +74,9 @@ class AlarmReceiver : BroadcastReceiver() {
             imageUrl = imageUrl,
             isQuote = selectedSentence.isQuote,
             context = selectedSentence.context,
+            // EKSİK OLAN SATIRLAR BURAYA EKLENDİ
             audioUrl = selectedSentence.audioUrl,
             videoUrl = selectedSentence.videoUrl
-
         )
         historyStore.addNotificationToHistory(history)
         return history
