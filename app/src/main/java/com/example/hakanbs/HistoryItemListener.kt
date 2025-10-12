@@ -6,4 +6,5 @@ interface HistoryItemListener {
     fun onImageClicked(imageUrl: String)
     fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?)
     fun onVideoClicked(videoUrl: String) // YENİ METOT
+    fun onItemClicked(historyId: Long, message: String)
 }

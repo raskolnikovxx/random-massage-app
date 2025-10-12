@@ -10,6 +10,8 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import java.text.SimpleDateFormat
@@ -18,15 +20,18 @@ import java.util.Locale
 import java.util.TimeZone
 
 class HistoryAdapter(
-    private var originalHistoryList: List<NotificationHistory>,
     private val listener: HistoryItemListener
-) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
+) : ListAdapter<NotificationHistory, HistoryAdapter.HistoryViewHolder>(DiffCallback()) {
 
-    private var filteredHistoryList: MutableList<NotificationHistory> = originalHistoryList.toMutableList()
+    private var originalHistoryList: List<NotificationHistory> = emptyList()
     private var mediaPlayer: MediaPlayer? = null
+    // ID of the history item whose audio is currently loaded/playing (null if none)
+    private var playingHistoryId: Long? = null
+    // track previous playing id for efficient UI updates
+    private var previousPlayingId: Long? = null
     private lateinit var context: Context
 
-    // Hatanın olduğu 'dateFormat' değişkeni burada tanımlanıyor.
+    // Date format
     private val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).apply {
         timeZone = TimeZone.getDefault()
     }
@@ -37,40 +42,62 @@ class HistoryAdapter(
         return HistoryViewHolder(view)
     }
 
-    fun releasePlayer() {
-        mediaPlayer?.release()
-        mediaPlayer = null
-    }
-
-    fun updateList(newList: List<NotificationHistory>) {
-        originalHistoryList = newList
-        filteredHistoryList = originalHistoryList.toMutableList()
-        notifyDataSetChanged()
-    }
-
-    fun filter(query: String?) {
-        filteredHistoryList.clear()
-        if (query.isNullOrEmpty()) {
-            filteredHistoryList.addAll(originalHistoryList)
-        } else {
-            val lowerCaseQuery = query.lowercase(Locale.getDefault())
-            val results = originalHistoryList.filter {
-                it.message.lowercase(Locale.getDefault()).contains(lowerCaseQuery) ||
-                        it.context?.lowercase(Locale.getDefault())?.contains(lowerCaseQuery) == true
-            }
-            filteredHistoryList.addAll(results)
-        }
-        notifyDataSetChanged()
-    }
-
     override fun onBindViewHolder(holder: HistoryViewHolder, position: Int) {
-        val item = filteredHistoryList[position]
+        val item = getItem(position)
         holder.bind(item)
     }
 
-    override fun getItemCount(): Int = filteredHistoryList.size
+    fun releasePlayer() {
+        try {
+            mediaPlayer?.stop()
+        } catch (e: Exception) { /* ignore */ }
+        try {
+            mediaPlayer?.release()
+        } catch (e: Exception) { /* ignore */ }
+        mediaPlayer = null
+        // remember previous then clear
+        previousPlayingId = playingHistoryId
+        playingHistoryId = null
+        // notify only affected items
+        try {
+            previousPlayingId?.let { id ->
+                val idx = currentList.indexOfFirst { it.id == id }
+                if (idx >= 0) notifyItemChanged(idx)
+            }
+        } catch (_: Exception) { }
+    }
 
-    // 'inner' kelimesi, bu sınıfın 'dateFormat' gibi dış sınıf değişkenlerine erişebilmesini sağlar.
+    // Yeni listeyi kaydet ve görüntüle
+    fun updateOriginalList(newList: List<NotificationHistory>) {
+        originalHistoryList = newList.toList()
+        submitList(originalHistoryList)
+    }
+
+    // Filtre uygulamak için: orijinali bozmadan ListAdapter'a gönder
+    fun filter(query: String?) {
+        if (query.isNullOrEmpty()) {
+            submitList(originalHistoryList)
+            return
+        }
+        val lowerCaseQuery = query.lowercase(Locale.getDefault())
+        val results = originalHistoryList.filter {
+            it.message.lowercase(Locale.getDefault()).contains(lowerCaseQuery) ||
+                    it.context?.lowercase(Locale.getDefault())?.contains(lowerCaseQuery) == true
+        }
+        submitList(results)
+    }
+
+    // DiffUtil
+    class DiffCallback : DiffUtil.ItemCallback<NotificationHistory>() {
+        override fun areItemsTheSame(oldItem: NotificationHistory, newItem: NotificationHistory): Boolean {
+            return oldItem.id == newItem.id
+        }
+
+        override fun areContentsTheSame(oldItem: NotificationHistory, newItem: NotificationHistory): Boolean {
+            return oldItem == newItem
+        }
+    }
+
     inner class HistoryViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvTime: TextView = itemView.findViewById(R.id.tv_history_time)
         private val tvMessage: TextView = itemView.findViewById(R.id.tv_history_message)
@@ -85,21 +112,32 @@ class HistoryAdapter(
         private val ivPlayVideo: ImageView = itemView.findViewById(R.id.iv_play_video)
 
         fun bind(history: NotificationHistory) {
-            tvTime.text = dateFormat.format(Date(history.time)) // Hatanın olduğu satır
+            tvTime.text = dateFormat.format(Date(history.time))
             tvMessage.text = history.message
+
+            // Set whole item click to open detail
+            itemView.setOnClickListener {
+                listener.onItemClicked(history.id, history.message)
+            }
 
             if (!history.context.isNullOrEmpty()) {
                 tvContext.text = if (history.isQuote) "💬 ${history.context}" else "Anı: ${history.context}"
                 tvContext.visibility = View.VISIBLE
-            } else { tvContext.visibility = View.GONE }
+            } else {
+                tvContext.visibility = View.GONE
+            }
             if (!history.reaction.isNullOrEmpty()) {
                 tvReaction.text = history.reaction
                 tvReaction.visibility = View.VISIBLE
-            } else { tvReaction.visibility = View.GONE }
+            } else {
+                tvReaction.visibility = View.GONE
+            }
             if (history.comments.isNotEmpty()) {
                 tvComment.text = "Not: ${history.comments.firstOrNull()?.text ?: "Çoklu Not Var"}"
                 tvComment.visibility = View.VISIBLE
-            } else { tvComment.visibility = View.GONE }
+            } else {
+                tvComment.visibility = View.GONE
+            }
 
             if (history.isPinned) {
                 tvFavorite.text = "Favorilere eklendi."
@@ -111,12 +149,12 @@ class HistoryAdapter(
                 tvFavorite.setTypeface(null, Typeface.NORMAL)
             }
 
-            // Tıklama Olayları
+            // Clicks
             tvFavorite.setOnClickListener { listener.onFavoriteToggled(history, !history.isPinned) }
             ivHeart.setOnClickListener { listener.onReactClicked(history) }
             ivAddComment.setOnClickListener { listener.onCommentClicked(history.id, history.message, null) }
 
-            // Medya Gösterim Mantığı
+            // Media
             ivImage.visibility = View.GONE
             ivPlayVideo.visibility = View.GONE
             ivPlayAudio.visibility = View.GONE
@@ -142,29 +180,84 @@ class HistoryAdapter(
 
             if (history.audioUrl != null) {
                 ivPlayAudio.visibility = View.VISIBLE
-                ivPlayAudio.setOnClickListener { playAudio(history.audioUrl) }
+
+                // Update icon based on whether this item is currently playing
+                val isPlayingThis = (history.id == playingHistoryId) && (mediaPlayer?.isPlaying == true)
+                ivPlayAudio.setImageResource(if (isPlayingThis) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+
+                ivPlayAudio.setOnClickListener {
+                    try {
+                        if (history.id == playingHistoryId) {
+                            // toggle pause/resume
+                            if (mediaPlayer?.isPlaying == true) {
+                                mediaPlayer?.pause()
+                                ivPlayAudio.setImageResource(android.R.drawable.ic_media_play)
+                            } else {
+                                mediaPlayer?.start()
+                                ivPlayAudio.setImageResource(android.R.drawable.ic_media_pause)
+                            }
+                        } else {
+                            // start new audio, stop previous
+                            startPlaying(history.audioUrl ?: return@setOnClickListener, history.id)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        Toast.makeText(itemView.context, "Ses oynatılırken hata oluştu", Toast.LENGTH_SHORT).show()
+                        releasePlayer()
+                    }
+                }
             }
         }
     }
 
-    private fun playAudio(url: String) {
+    private fun startPlaying(url: String, historyId: Long) {
+        // stop previous and remember previous id for UI update
+        val prevId = playingHistoryId
+        releasePlayer()
+        playingHistoryId = if (historyId >= 0) historyId else null
+        previousPlayingId = prevId
+
+        // notify previous and new item's UI to update icons
         try {
-            releasePlayer()
-            Toast.makeText(context, "Ses çalınıyor...", Toast.LENGTH_SHORT).show()
-            mediaPlayer = MediaPlayer().apply {
+            prevId?.let { id ->
+                val idx = currentList.indexOfFirst { it.id == id }
+                if (idx >= 0) notifyItemChanged(idx)
+            }
+            playingHistoryId?.let { id ->
+                val idx = currentList.indexOfFirst { it.id == id }
+                if (idx >= 0) notifyItemChanged(idx)
+            }
+        } catch (_: Exception) { }
+
+        Toast.makeText(context, "Ses çalınıyor...", Toast.LENGTH_SHORT).show()
+        mediaPlayer = MediaPlayer().apply {
+            try {
                 setDataSource(url)
                 prepareAsync()
-                setOnPreparedListener { start() }
-                setOnCompletionListener { releasePlayer() }
+                setOnPreparedListener {
+                    start()
+                    // notify current item (prepared -> playing)
+                    try {
+                        playingHistoryId?.let { id ->
+                            val idx = currentList.indexOfFirst { it.id == id }
+                            if (idx >= 0) notifyItemChanged(idx)
+                        }
+                    } catch (_: Exception) { }
+                }
+                setOnCompletionListener {
+                    // playback finished
+                    releasePlayer()
+                }
                 setOnErrorListener { _, _, _ ->
                     releasePlayer()
                     Toast.makeText(context, "Ses çalınırken bir hata oluştu.", Toast.LENGTH_SHORT).show()
                     true
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Ses dosyası hazırlanamadı.", Toast.LENGTH_SHORT).show()
+                releasePlayer()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "Ses dosyası hazırlanamadı.", Toast.LENGTH_SHORT).show()
         }
     }
 }

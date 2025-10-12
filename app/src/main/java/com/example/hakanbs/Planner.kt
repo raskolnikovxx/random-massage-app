@@ -7,7 +7,9 @@ import android.content.Intent
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import kotlin.random.Random
 
 class Planner(private val context: Context, private val config: RemoteConfig) {
@@ -23,18 +25,31 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
 
     data class OverrideData(val messageId: String?, val imageUrl: String?)
 
-    fun scheduleAllNotifications() {
+    /**
+     * Schedule notifications for the day.
+     * If forceReschedule == false and we've already scheduled for today, this becomes a no-op.
+     */
+    fun scheduleAllNotifications(forceReschedule: Boolean = true) {
+        val todayKey = getTodayString()
+        if (!forceReschedule) {
+            val lastDate = prefs.getString(PREF_SCHEDULE_DATE, null)
+            if (lastDate == todayKey) {
+                Log.d(TAG, "Already scheduled for today; skipping reschedule as not forced.")
+                return
+            }
+        }
+
         if (!config.enabled) {
             cancelAllNotifications()
             Log.d(TAG, "Config disabled. No alarms scheduled.")
+            prefs.edit().putString(PREF_SCHEDULE_DATE, todayKey).apply()
             return
         }
 
         cancelAllNotifications()
 
-        val dailyRandomTimes = getOrCreateDailyRandomTimes()
-        val finalScheduledTimes = dailyRandomTimes.toMutableMap()
-
+        // 1) Schedule overrides (explicit times from remote config)
+        var scheduledCount = 0
         config.overrides.forEach { remoteOverride ->
             val parts = remoteOverride.time.split(":")
             if (parts.size == 2) {
@@ -52,76 +67,48 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
                             add(Calendar.DAY_OF_YEAR, 1)
                         }
                     }
-                    finalScheduledTimes[calendar.timeInMillis] = OverrideData(remoteOverride.messageId, remoteOverride.imageUrl)
+                    scheduleNotification(calendar.timeInMillis, remoteOverride.messageId, remoteOverride.imageUrl)
+                    scheduledCount++
                 } catch (e: NumberFormatException) {
                     Log.e(TAG, "Invalid override time format: ${remoteOverride.time}", e)
                 }
             }
         }
 
-        finalScheduledTimes.toSortedMap().forEach { (timeMillis, data) ->
-            scheduleNotification(timeMillis, data.messageId, data.imageUrl)
-        }
+        // 2) Schedule a single daily random notification (22:00-23:00) from the sentences
+        // Exclude sentences referenced by overrides when selecting the random daily message
+        val overrideIds = config.overrides.mapNotNull { it.messageId }.toSet()
+        val candidateSentences = config.sentences.filter { it.id !in overrideIds }
 
-        Log.d(TAG, "Total ${finalScheduledTimes.size} notifications scheduled.")
-    }
-
-    private fun getOrCreateDailyRandomTimes(): Map<Long, OverrideData> {
-        val today = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        val lastScheduledDay = prefs.getInt(PREF_SCHEDULE_DATE, 0)
-
-        if (today == lastScheduledDay) {
-            val json = prefs.getString(PREF_SCHEDULE_KEY, null)
-            if (json != null) {
-                val type = object : TypeToken<Map<Long, OverrideData>>() {}.type
-                Log.d(TAG, "Using existing random schedule for today.")
-                return gson.fromJson(json, type) ?: emptyMap()
-            }
-        }
-
-        Log.d(TAG, "Calculating new random schedule for today.")
-        val newScheduledTimes = calculateDailyRandomTimes()
-        val json = gson.toJson(newScheduledTimes)
-        prefs.edit()
-            .putString(PREF_SCHEDULE_KEY, json)
-            .putInt(PREF_SCHEDULE_DATE, today)
-            .apply()
-
-        return newScheduledTimes
-    }
-
-    private fun calculateDailyRandomTimes(): Map<Long, OverrideData> {
-        val newScheduledTimes = mutableMapOf<Long, OverrideData>()
-        val timesPerDay = config.timesPerDay
-        val startHour = config.startHour
-        val endHour = config.endHour
-
-        if (startHour >= endHour || timesPerDay <= 0) {
-            return emptyMap()
-        }
-
-        val totalMinutes = (endHour - startHour) * 60
-        val slotDuration = totalMinutes / timesPerDay
-
-        for (i in 0 until timesPerDay) {
-            val slotStartMinute = startHour * 60 + i * slotDuration
-            val slotEndMinute = startHour * 60 + (i + 1) * slotDuration
-            val randomMinuteInSlot = Random.nextInt(slotStartMinute, slotEndMinute)
-
+        if (candidateSentences.isNotEmpty()) {
+            // Choose a random minute between 22:00 and 22:59
+            val randomMinute = (0..59).random()
             val calendar = Calendar.getInstance().apply {
                 timeInMillis = System.currentTimeMillis()
-                set(Calendar.HOUR_OF_DAY, randomMinuteInSlot / 60)
-                set(Calendar.MINUTE, randomMinuteInSlot % 60)
+                set(Calendar.HOUR_OF_DAY, 22)
+                set(Calendar.MINUTE, randomMinute)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
-
                 if (before(Calendar.getInstance())) {
                     add(Calendar.DAY_OF_YEAR, 1)
                 }
             }
-            newScheduledTimes[calendar.timeInMillis] = OverrideData(null, null)
+            // No fixed messageId -> AlarmReceiver will pick an available sentence (not in seen list)
+            scheduleNotification(calendar.timeInMillis, null, null)
+            scheduledCount++
+        } else {
+            Log.w(TAG, "No candidate sentences available for daily random notification (all are overrides or empty).")
         }
-        return newScheduledTimes
+
+        // mark today's schedule time to avoid re-scheduling repeatedly
+        prefs.edit().putString(PREF_SCHEDULE_DATE, todayKey).apply()
+
+        Log.d(TAG, "Total $scheduledCount notifications scheduled for today (including overrides and daily random).")
+    }
+
+    private fun getTodayString(): String {
+        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        return fmt.format(Calendar.getInstance().time)
     }
 
     private fun scheduleNotification(timeMillis: Long, messageId: String?, imageUrl: String?) {
@@ -137,13 +124,29 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // --- DEĞİŞİKLİK BURADA: setExact yerine set kullanılıyor ---
-        alarmManager.set(
-            AlarmManager.RTC_WAKEUP,
-            timeMillis,
-            pendingIntent
-        )
-        // --- DEĞİŞİKLİK BİTTİ ---
+        // Use setExactAndAllowWhileIdle when available so the alarm fires close to the chosen time
+        // First, check if we are allowed to schedule exact alarms (Android S/API 31+).
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    if (alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                    } else {
+                        Log.w(TAG, "App cannot schedule exact alarms (missing SCHEDULE_EXACT_ALARM). Scheduling with set() as fallback.")
+                        alarmManager.set(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                    }
+                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                } else {
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+                }
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception while checking/setting exact alarm, falling back to set(): ${e.message}")
+            alarmManager.set(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+        }
 
         val calendar = Calendar.getInstance().apply { timeInMillis = timeMillis }
         Log.d(TAG, "Alarm scheduled for: ${calendar.get(Calendar.HOUR_OF_DAY)}:${String.format("%02d", calendar.get(Calendar.MINUTE))}")

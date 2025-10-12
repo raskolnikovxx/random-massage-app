@@ -14,11 +14,27 @@ class HistoryStore(context: Context) {
     private val seenPrefs: SharedPreferences = context.getSharedPreferences("SeenSentenceIds", Context.MODE_PRIVATE)
     private val gson = Gson()
 
+    companion object {
+        // Global lock to synchronize access to the seen-id SharedPreferences across
+        // different HistoryStore instances (prevents race conditions when alarms
+        // are executed concurrently in different threads).
+        private val SEEN_LOCK = Any()
+    }
+
     private val firestore = FirebaseFirestore.getInstance()
     private val deviceId: String = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     private val HISTORY_LIST_KEY = "history_list"
     private val SEEN_ID_SET_KEY = "seen_id_set"
 
+
+    // Seen list'ini tamamen sıfırlar (yalnızca hangi cümlelerin gösterildiği bilgisini temizler).
+    // NOT: Bu işlem NotificationHistory (geçmiş) kayıtlarını silmez; sadece "görüldü" ID setini temizler.
+    fun clearSeenSentenceIds() {
+        synchronized(SEEN_LOCK) {
+            seenPrefs.edit().remove(SEEN_ID_SET_KEY).apply()
+            Log.d(TAG, "Seen sentence ids cleared.")
+        }
+    }
 
     fun getHistory(): List<NotificationHistory> {
         val json = historyPrefs.getString(HISTORY_LIST_KEY, null) ?: return emptyList()
@@ -111,15 +127,25 @@ class HistoryStore(context: Context) {
     // --- Seen Store (Görülenler) İşlemleri ---
 
     fun addSeenSentenceId(messageId: String) {
-        val seenIds = getSeenSentenceIds().toMutableSet()
-        seenIds.add(messageId)
-        val json = gson.toJson(seenIds)
-        seenPrefs.edit().putString(SEEN_ID_SET_KEY, json).apply()
+        synchronized(SEEN_LOCK) {
+            val currentJson = seenPrefs.getString(SEEN_ID_SET_KEY, null)
+            val type = object : TypeToken<Set<String>>() {}.type
+            val seenIds = if (currentJson.isNullOrEmpty()) mutableSetOf<String>() else gson.fromJson<Set<String>>(currentJson, type).toMutableSet()
+            if (seenIds.add(messageId)) {
+                val json = gson.toJson(seenIds)
+                seenPrefs.edit().putString(SEEN_ID_SET_KEY, json).apply()
+                Log.d(TAG, "addSeenSentenceId: added $messageId, total seen=${seenIds.size}")
+            } else {
+                Log.d(TAG, "addSeenSentenceId: $messageId already present in seen set")
+            }
+        }
     }
 
     fun getSeenSentenceIds(): Set<String> {
-        val json = seenPrefs.getString(SEEN_ID_SET_KEY, null) ?: return emptySet()
-        val type = object : TypeToken<Set<String>>() {}.type
-        return gson.fromJson(json, type) ?: emptySet()
+        synchronized(SEEN_LOCK) {
+            val json = seenPrefs.getString(SEEN_ID_SET_KEY, null) ?: return emptySet()
+            val type = object : TypeToken<Set<String>>() {}.type
+            return gson.fromJson(json, type) ?: emptySet()
+        }
     }
 }

@@ -20,11 +20,11 @@ android {
         viewBinding = true
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 }
 
@@ -39,8 +39,7 @@ dependencies {
     implementation("com.github.chrisbanes:PhotoView:2.3.0")
     implementation("com.google.android.exoplayer:exoplayer:2.19.1")
     implementation("io.coil-kt:coil-gif:2.6.0") // BU SATIRI EKLEYİN
-
-
+    implementation("androidx.cardview:cardview:1.0.0")
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
@@ -54,6 +53,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-config-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx")
 
     // GSON
     implementation("com.google.code.gson:gson:2.10.1")

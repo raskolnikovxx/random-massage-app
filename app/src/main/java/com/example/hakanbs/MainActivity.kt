@@ -2,8 +2,8 @@ package com.example.hakanbs
 
 import android.Manifest
 import android.app.AlarmManager
-import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
@@ -57,6 +57,13 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     private var isShowingFavorites = false
 
+    // Pagination fields
+    private val PAGE_SIZE = 20
+    private var currentPage = 0
+    private var allHistoryCache: List<NotificationHistory> = emptyList()
+    private var isLoadingMore = false
+    private var isLastPage = false
+
     // This launcher handles the result from CouponsActivity
     private val couponsActivityLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -67,22 +74,24 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
     }
 
-    private val requestNotificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            Log.d(TAG, "POST_NOTIFICATIONS granted.")
-        } else {
-            Toast.makeText(this, "Notification permission is recommended.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     // --- HistoryItemListener Implementations ---
 
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
-        val history = historyStore.getHistory().find { it.id == historyId }
-        val existingNotes = history?.comments ?: emptyList()
-        showNoteEntryDialog(historyId, originalMessage, existingNotes)
+        // Open the detail screen for this history item where the user can see and add comments
+        val intent = android.content.Intent(this, HistoryDetailActivity::class.java).apply {
+            putExtra(HistoryDetailActivity.EXTRA_HISTORY_ID, historyId)
+            putExtra(HistoryDetailActivity.EXTRA_MESSAGE, originalMessage)
+        }
+        startActivity(intent)
+    }
+
+    override fun onItemClicked(historyId: Long, message: String) {
+        // When the whole item/card is tapped, navigate to the same detail screen
+        val intent = android.content.Intent(this, HistoryDetailActivity::class.java).apply {
+            putExtra(HistoryDetailActivity.EXTRA_HISTORY_ID, historyId)
+            putExtra(HistoryDetailActivity.EXTRA_MESSAGE, message)
+        }
+        startActivity(intent)
     }
 
     override fun onReactClicked(history: NotificationHistory) {
@@ -129,6 +138,19 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         SyncRemoteWorker.schedule(this)
         startInitialSync()
 
+        // DEBUG: Hemen planlamayı tetikleyerek yeni Planner davranışını test et (sadece debug build)
+        if (isDebugBuild()) {
+            lifecycleScope.launch {
+                try {
+                    val cfg = controlConfig.getLocalConfig()
+                    Planner(this@MainActivity, cfg).scheduleAllNotifications(false)
+                    Log.d(TAG, "DEBUG: Planner.scheduleAllNotifications() triggered for testing.")
+                } catch (e: Exception) {
+                    Log.w(TAG, "DEBUG: Failed to trigger planner for testing: ${e.message}")
+                }
+            }
+        }
+
         Log.d(TAG, "MainActivity initialized successfully.")
     }
 
@@ -145,6 +167,11 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     }
 
     // --- Helper Functions ---
+
+    private fun isDebugBuild(): Boolean {
+        return (applicationContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
 
     private fun setupUI() {
         recyclerView = findViewById(R.id.recycler_view_history)
@@ -181,11 +208,28 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
 
 
-        historyAdapter = HistoryAdapter(emptyList(), this)
+        historyAdapter = HistoryAdapter(this)
         recyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
         }
+
+        // Endless scroll - yükle daha fazla
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                super.onScrolled(rv, dx, dy)
+                val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
+                val visibleItemCount = layoutManager.childCount
+                val totalItemCount = layoutManager.itemCount
+                val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
+
+                if (!isLoadingMore && !isLastPage) {
+                    if (visibleItemCount + firstVisibleItemPosition >= totalItemCount - 3) {
+                        loadMore()
+                    }
+                }
+            }
+        })
 
         tvFavoritesToggle.setOnClickListener {
             isShowingFavorites = !isShowingFavorites
@@ -194,8 +238,9 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
 
         swipeRefreshLayout.setOnRefreshListener {
-            loadHistory()
+            // Yenileme her zaman sayfalamayı resetlesin
             fetchRemoteConfig()
+            loadHistory(reset = true)
         }
 
         setupSearchListener()
@@ -224,15 +269,28 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
     }
 
-    private fun loadHistory() {
+    // loadHistory artık sayfalamayı destekliyor. reset=true ise baştan yükler.
+    private fun loadHistory(reset: Boolean = true) {
         swipeRefreshLayout.isRefreshing = true
-        val allHistory = historyStore.getHistory()
-        val displayList = if (isShowingFavorites) {
-            allHistory.filter { it.isPinned }
+
+        if (reset) {
+            currentPage = 0
+            isLastPage = false
+            allHistoryCache = historyStore.getHistory()
         } else {
-            allHistory
+            if (allHistoryCache.isEmpty()) allHistoryCache = historyStore.getHistory()
         }
-        historyAdapter.updateList(displayList)
+
+        val sourceList = if (isShowingFavorites) {
+            allHistoryCache.filter { it.isPinned }
+        } else {
+            allHistoryCache
+        }
+
+        val endIndex = ((currentPage + 1) * PAGE_SIZE).coerceAtMost(sourceList.size)
+        val pageItems = if (endIndex > 0) sourceList.subList(0, endIndex) else emptyList()
+
+        historyAdapter.updateOriginalList(pageItems)
 
         val currentQuery = searchView.query.toString()
         if (currentQuery.isNotEmpty()) {
@@ -241,14 +299,24 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         val config = controlConfig.getLocalConfig()
         updateUiTexts(config)
         swipeRefreshLayout.isRefreshing = false
+
+        isLastPage = endIndex >= sourceList.size
         tvEmpty.visibility = if (historyAdapter.itemCount == 0) View.VISIBLE else View.GONE
+    }
+
+    private fun loadMore() {
+        if (isLastPage) return
+        isLoadingMore = true
+        currentPage++
+        loadHistory(reset = false)
+        isLoadingMore = false
     }
 
     private fun fetchRemoteConfig() {
         lifecycleScope.launch(Dispatchers.IO) {
             controlConfig.fetchConfig()
             val config = controlConfig.getLocalConfig()
-            Planner(this@MainActivity, config).scheduleAllNotifications()
+            Planner(this@MainActivity, config).scheduleAllNotifications(false)
             withContext(Dispatchers.Main) {
                 loadHistory()
             }
@@ -358,27 +426,29 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     }
 
     private fun checkAlarmPermission() {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
             if (!alarmManager.canScheduleExactAlarms() && !prefs.getBoolean(PREF_ALARM_DIALOG_SHOWN, false)) {
                 prefs.edit().putBoolean(PREF_ALARM_DIALOG_SHOWN, true).apply()
                 AlertDialog.Builder(this)
                     .setTitle("INFORMATION")
-                    .setMessage("Please approve if the app asks for permission to send notifications on time. Otherwise, your notifications may be delayed by a few minutes.")
-                    .setPositiveButton("Got it") { _, _ -> }
+                    .setMessage("Uygulama kesin zamanlı alarmlar kullanmak istiyor. Lütfen izin verin; aksi halde bildirimler gecikebilir. Exact alarm iznini vermek için Ayarlar ekranına yönlendirileceksiniz.")
+                    .setPositiveButton("Enable") { _, _ ->
+                        try {
+                            // Açıkça kullanıcının exact alarm yetkisini istemek için Ayarlar sayfasını aç
+                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            // Fallback: genel ayarlar sayfasını aç
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = android.net.Uri.parse("package:" + packageName)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
                     .show()
-            }
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == POST_NOTIFICATIONS_PERMISSION_REQUEST_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Notification permission granted.", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Notifications may not arrive without permission.", Toast.LENGTH_LONG).show()
             }
         }
     }

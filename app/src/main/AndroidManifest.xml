@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- İsteğe bağlı: exact alarm izni (Android 12+). Kullanıcı yine de Ayarlar'dan onay vermelidir. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -24,6 +27,7 @@
 
         <activity android:name=".WheelActivity" />
         <activity android:name=".SnakeGameActivity" />
+        <activity android:name=".HistoryDetailActivity" />
 
         <activity android:name=".CouponsActivity" />
 

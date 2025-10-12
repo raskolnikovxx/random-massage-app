@@ -37,7 +37,7 @@ class SyncRemoteWorker(appContext: Context, workerParams: WorkerParameters) :
 
     companion object {
         private const val WORK_NAME = "RemoteConfigSyncWork"
-        private const val SYNC_INTERVAL_MINUTES = 3L // Her 3 dakikada bir
+        private const val SYNC_INTERVAL_MINUTES = 60L // Her 60 dakikada bir
 
         fun schedule(context: Context) {
             val syncRequest = PeriodicWorkRequestBuilder<SyncRemoteWorker>(

@@ -50,19 +50,28 @@ class AlarmReceiver : BroadcastReceiver() {
             // Cümlenin ID'sini "görüldü" olarak işaretle
             historyStore.addSeenSentenceId(selectedSentence.id)
 
-            // Sonraki alarmı planla
-            Planner(context, config).scheduleAllNotifications()
+            // NOT: Artık her alarm sonrası tüm planları yeniden kurmuyoruz.
+            // Günlük yeniden planlama için DailySchedulerWorker kullanılıyor (4:00'te).
         }
     }
 
     private fun findAndSelectSentence(config: RemoteConfig, historyStore: HistoryStore, forcedMessageId: String?): RemoteSentence? {
-        return if (forcedMessageId != null) {
-            config.sentences.find { it.id == forcedMessageId }
-        } else {
-            val seenIds = historyStore.getSeenSentenceIds()
-            val availableSentences = config.sentences.filter { it.id !in seenIds }
-            if (availableSentences.isEmpty()) null else availableSentences.random()
+        if (forcedMessageId != null) {
+            return config.sentences.find { it.id == forcedMessageId }
         }
+
+        val seenIds = historyStore.getSeenSentenceIds()
+        var availableSentences = config.sentences.filter { it.id !in seenIds }
+
+        // Eğer gösterilecek cümle kalmadıysa, "seen" listesini temizle ve tekrar baştan gösterime başla
+        if (availableSentences.isEmpty()) {
+            historyStore.clearSeenSentenceIds()
+            // Yeniden hesapla: şimdi tüm cümleler tekrar kullanılabilir
+            availableSentences = config.sentences.toList()
+        }
+
+        if (availableSentences.isEmpty()) return null
+        return availableSentences.random()
     }
 
     // --- DÜZELTİLMİŞ FONKSİYON ---
