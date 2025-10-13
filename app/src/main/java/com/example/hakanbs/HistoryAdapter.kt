@@ -50,10 +50,10 @@ class HistoryAdapter(
     fun releasePlayer() {
         try {
             mediaPlayer?.stop()
-        } catch (e: Exception) { /* ignore */ }
+        } catch (_: Exception) { /* ignore */ }
         try {
             mediaPlayer?.release()
-        } catch (e: Exception) { /* ignore */ }
+        } catch (_: Exception) { /* ignore */ }
         mediaPlayer = null
         // remember previous then clear
         previousPlayingId = playingHistoryId
@@ -133,18 +133,21 @@ class HistoryAdapter(
                 tvReaction.visibility = View.GONE
             }
             if (history.comments.isNotEmpty()) {
-                tvComment.text = "Not: ${history.comments.firstOrNull()?.text ?: "Çoklu Not Var"}"
+                val commentText = history.comments.firstOrNull()?.text ?: itemView.context.getString(R.string.many_notes)
+                tvComment.text = itemView.context.getString(R.string.note_prefix, commentText)
                 tvComment.visibility = View.VISIBLE
             } else {
                 tvComment.visibility = View.GONE
             }
 
             if (history.isPinned) {
-                tvFavorite.text = "Favorilere eklendi."
-                tvFavorite.setTextColor(ContextCompat.getColor(itemView.context, R.color.purple_700))
+                tvFavorite.text = itemView.context.getString(R.string.favorited)
+                val isNightMode = (itemView.context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                val colorRes = if (isNightMode) R.color.light_gray_near_white else R.color.purple_700
+                tvFavorite.setTextColor(ContextCompat.getColor(itemView.context, colorRes))
                 tvFavorite.setTypeface(null, Typeface.BOLD_ITALIC)
             } else {
-                tvFavorite.text = "Favoriye ekle"
+                tvFavorite.text = itemView.context.getString(R.string.add_to_favorites)
                 tvFavorite.setTextColor(ContextCompat.getColor(itemView.context, android.R.color.darker_gray))
                 tvFavorite.setTypeface(null, Typeface.NORMAL)
             }
@@ -199,7 +202,8 @@ class HistoryAdapter(
                             }
                         } else {
                             // start new audio, stop previous
-                            startPlaying(history.audioUrl ?: return@setOnClickListener, history.id)
+                            val audioUrl = history.audioUrl ?: return@setOnClickListener
+                            startPlaying(audioUrl, history.id)
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()

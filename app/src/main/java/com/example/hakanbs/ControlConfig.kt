@@ -39,6 +39,13 @@ data class RemoteOverride(
     val imageUrl: String? = null
 )
 
+// Yeni: RandomDaily yapılandırması
+data class RandomDaily(
+    val enabled: Boolean = false,
+    val countPerDay: Int = 1,
+    val pool: List<String> = emptyList()
+)
+
 data class RemoteConfig(
     val enabled: Boolean = true,
     val startHour: Int = 10,
@@ -49,7 +56,9 @@ data class RemoteConfig(
     val activityTitle: String = "Anılarımız",
     val emptyMessage: String = "Henüz anı yok...",
     val decisionWheel: DecisionWheelOption = DecisionWheelOption(),
-    val coupons: List<Coupon> = emptyList()
+    val coupons: List<Coupon> = emptyList(),
+    // Yeni alan
+    val randomDaily: RandomDaily = RandomDaily()
 )
 
 data class NotificationHistory(
@@ -114,18 +123,73 @@ class ControlConfig(private val context: Context) {
                 return@withContext null
             }
 
-            val config = gson.fromJson(jsonString, RemoteConfig::class.java)
+            val remote = gson.fromJson(jsonString, RemoteConfig::class.java)
 
-            // Ensure sentences have stable, unique ids. This handles RemoteConfig updates where
-            // some sentences may lack an id or ids might collide after edits.
-            val validatedConfig = ensureSentenceIds(config)
+            // Merge remote with embedded defaults (assets) so app uses both sets. Remote takes precedence.
+            val merged = mergeWithDefaults(remote)
 
-            saveConfigLocally(validatedConfig)
-            Log.d(TAG, "Config fetched, validated and saved successfully.")
-            return@withContext validatedConfig
+            // Ensure sentences have stable, unique ids.
+            val validatedConfig = ensureSentenceIds(merged)
+
+            // Eğer randomDaily etkinse ama pool boşsa, tüm sentence id'lerini otomatik kullan.
+            val finalConfig = if (validatedConfig.randomDaily.enabled && validatedConfig.randomDaily.pool.isEmpty()) {
+                val allIds = validatedConfig.sentences.map { it.id }
+                validatedConfig.copy(randomDaily = validatedConfig.randomDaily.copy(pool = allIds))
+            } else {
+                validatedConfig
+            }
+
+            saveConfigLocally(finalConfig)
+            Log.d(TAG, "Config fetched, merged with defaults, validated and saved successfully.")
+            return@withContext finalConfig
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching config from Firebase: ${e.message}")
             return@withContext null
+        }
+    }
+
+    // Merge remote config with embedded defaults from assets/default_config.json
+    private fun mergeWithDefaults(remote: RemoteConfig): RemoteConfig {
+        try {
+            val input = context.assets.open("default_config.json")
+            val size = input.available()
+            val buffer = ByteArray(size)
+            input.read(buffer)
+            input.close()
+            val defaultJson = String(buffer, Charsets.UTF_8)
+            val defaults = gson.fromJson(defaultJson, RemoteConfig::class.java)
+
+            // Build a map of defaults by id for quick replace/merge
+            val defaultMap = defaults.sentences.associateBy { it.id }.toMutableMap()
+            // Remote sentences overwrite defaults with same id; otherwise are added
+            remote.sentences.forEach { s ->
+                defaultMap[s.id] = s
+            }
+            val mergedSentences = defaultMap.values.toList()
+
+            // Merge overrides: combine defaults + remote, remote overrides take precedence by time+messageId pair
+            val combinedOverrides = (defaults.overrides + remote.overrides).distinctBy { Pair(it.time, it.messageId) }
+
+            // Merge randomDaily: prefer remote if enabled, otherwise keep defaults
+            val mergedRandomDaily = if (remote.randomDaily.enabled) remote.randomDaily else defaults.randomDaily
+
+            // Other top-level fields prefer remote when provided
+            return RemoteConfig(
+                enabled = remote.enabled,
+                startHour = remote.startHour,
+                endHour = remote.endHour,
+                timesPerDay = remote.timesPerDay,
+                sentences = mergedSentences,
+                overrides = combinedOverrides,
+                activityTitle = if (remote.activityTitle.isNotBlank()) remote.activityTitle else defaults.activityTitle,
+                emptyMessage = if (remote.emptyMessage.isNotBlank()) remote.emptyMessage else defaults.emptyMessage,
+                decisionWheel = if (remote.decisionWheel.options.isNotEmpty()) remote.decisionWheel else defaults.decisionWheel,
+                coupons = if (remote.coupons.isNotEmpty()) remote.coupons else defaults.coupons,
+                randomDaily = mergedRandomDaily
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load defaults for merge: ${e.message}")
+            return remote
         }
     }
 
@@ -134,6 +198,7 @@ class ControlConfig(private val context: Context) {
     private fun ensureSentenceIds(config: RemoteConfig): RemoteConfig {
         val seenIds = mutableSetOf<String>()
         val newSentences = mutableListOf<RemoteSentence>()
+        val originalIds = config.sentences.map { it.id }
 
         config.sentences.forEachIndexed { idx, s ->
             var id = s.id.orEmpty().trim()
@@ -153,14 +218,32 @@ class ControlConfig(private val context: Context) {
             newSentences.add(s.copy(id = id))
         }
 
-        // Validate overrides reference existing ids; warn if they don't
-        config.overrides.forEach { o ->
-            if (!o.messageId.isNullOrEmpty() && o.messageId !in seenIds) {
-                Log.w(TAG, "RemoteOverride references unknown messageId: ${o.messageId}")
+        // Build mapping from original ids to new ids (by position) to remap overrides if needed
+        val idMapping = mutableMapOf<String, String>()
+        for (i in originalIds.indices) {
+            val orig = originalIds[i]
+            val updated = newSentences.getOrNull(i)?.id ?: orig
+            if (orig.isNotEmpty()) idMapping[orig] = updated
+        }
+
+        // Update overrides: if an override references an original id that has been changed, map it
+        val newOverrides = config.overrides.map { o ->
+            val mid = o.messageId
+            if (!mid.isNullOrEmpty() && idMapping.containsKey(mid)) {
+                o.copy(messageId = idMapping[mid])
+            } else {
+                o
             }
         }
 
-        return config.copy(sentences = newSentences)
+        // Validate overrides reference existing ids; warn if they don't
+        newOverrides.forEach { o ->
+            if (!o.messageId.isNullOrEmpty() && o.messageId !in seenIds) {
+                Log.w(TAG, "RemoteOverride references unknown messageId after mapping: ${o.messageId}")
+            }
+        }
+
+        return config.copy(sentences = newSentences, overrides = newOverrides)
     }
 
     private fun generateStableId(text: String): String {
@@ -185,7 +268,32 @@ class ControlConfig(private val context: Context) {
         return if (json != null) {
             gson.fromJson(json, RemoteConfig::class.java)
         } else {
-            RemoteConfig()
+            // Attempt to load default from assets as a fallback
+            try {
+                val input = context.assets.open("default_config.json")
+                val size = input.available()
+                val buffer = ByteArray(size)
+                input.read(buffer)
+                input.close()
+                val jsonString = String(buffer, Charsets.UTF_8)
+                val cfg = gson.fromJson(jsonString, RemoteConfig::class.java)
+                // ensure ids and validity
+                val validated = ensureSentenceIds(cfg)
+
+                // Aynı mantık: randomDaily etkinse ve pool boşsa, tüm sentence id'lerini ekle
+                val final = if (validated.randomDaily.enabled && validated.randomDaily.pool.isEmpty()) {
+                    val allIds = validated.sentences.map { it.id }
+                    validated.copy(randomDaily = validated.randomDaily.copy(pool = allIds))
+                } else {
+                    validated
+                }
+
+                saveConfigLocally(final)
+                return final
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load local config from assets: ${e.message}")
+                return RemoteConfig()
+            }
         }
     }
 }

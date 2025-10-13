@@ -2,6 +2,7 @@ package com.example.hakanbs
 
 import android.Manifest
 import android.app.AlarmManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -10,8 +11,10 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -28,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkManager
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,7 +82,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     override fun onCommentClicked(historyId: Long, originalMessage: String, currentComment: String?) {
         // Open the detail screen for this history item where the user can see and add comments
-        val intent = android.content.Intent(this, HistoryDetailActivity::class.java).apply {
+        val intent = Intent(this, HistoryDetailActivity::class.java).apply {
             putExtra(HistoryDetailActivity.EXTRA_HISTORY_ID, historyId)
             putExtra(HistoryDetailActivity.EXTRA_MESSAGE, originalMessage)
         }
@@ -87,7 +91,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     override fun onItemClicked(historyId: Long, message: String) {
         // When the whole item/card is tapped, navigate to the same detail screen
-        val intent = android.content.Intent(this, HistoryDetailActivity::class.java).apply {
+        val intent = Intent(this, HistoryDetailActivity::class.java).apply {
             putExtra(HistoryDetailActivity.EXTRA_HISTORY_ID, historyId)
             putExtra(HistoryDetailActivity.EXTRA_MESSAGE, message)
         }
@@ -138,13 +142,29 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         SyncRemoteWorker.schedule(this)
         startInitialSync()
 
-        // DEBUG: Hemen planlamayı tetikleyerek yeni Planner davranışını test et (sadece debug build)
+        // Immediately try to fetch remote config once on startup and apply schedules
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val cfg = controlConfig.fetchConfig() ?: controlConfig.getLocalConfig()
+                try {
+                    // Run scheduler on IO (not on Main) to avoid blocking UI thread
+                    Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
+                    Log.d("MainActivity", "Initial Planner.scheduleAllNotifications executed on startup (background thread).")
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "Failed to run Planner on startup: ${e.message}")
+                }
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Startup config fetch failed: ${e.message}")
+            }
+        }
+
+        // DEBUG: Hemen planlamayı tetkileyerek yeni Planner davranışını test et (sadece debug build)
         if (isDebugBuild()) {
-            lifecycleScope.launch {
+            lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val cfg = controlConfig.getLocalConfig()
                     Planner(this@MainActivity, cfg).scheduleAllNotifications(false)
-                    Log.d(TAG, "DEBUG: Planner.scheduleAllNotifications() triggered for testing.")
+                    Log.d(TAG, "DEBUG: Planner.scheduleAllNotifications() triggered for testing (background thread).")
                 } catch (e: Exception) {
                     Log.w(TAG, "DEBUG: Failed to trigger planner for testing: ${e.message}")
                 }
@@ -152,6 +172,17 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
 
         Log.d(TAG, "MainActivity initialized successfully.")
+
+        // SearchView hint ve metin rengini dark modda light_gray_near_white yap
+        val isNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        if (isNightMode) {
+            val searchEditText = searchView.findViewById<EditText>(androidx.appcompat.R.id.search_src_text)
+            if (searchEditText != null) {
+                val lightGray = ContextCompat.getColor(this, R.color.light_gray_near_white)
+                searchEditText.setTextColor(lightGray)
+                searchEditText.setHintTextColor(lightGray)
+            }
+        }
     }
 
     override fun onResume() {
@@ -179,6 +210,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout)
         searchView = findViewById(R.id.search_view)
         tvFavoritesToggle = findViewById(R.id.tv_favorites_toggle)
+        val tvCoupons: TextView = findViewById(R.id.tv_coupons)
 
         val homepageIcon: ImageView = findViewById(R.id.tv_homepage)
         homepageIcon.setOnClickListener {
@@ -201,8 +233,7 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             startActivity(Intent(this, WheelActivity::class.java))
         }
 
-        val couponsButton: TextView = findViewById(R.id.tv_coupons)
-        couponsButton.setOnClickListener {
+        tvCoupons.setOnClickListener {
             val intent = Intent(this, CouponsActivity::class.java)
             couponsActivityLauncher.launch(intent)
         }
@@ -234,22 +265,61 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         tvFavoritesToggle.setOnClickListener {
             isShowingFavorites = !isShowingFavorites
             updateFavoritesToggleUI()
+            updateMenuTextColors()
             loadHistory()
         }
 
         swipeRefreshLayout.setOnRefreshListener {
             // Yenileme her zaman sayfalamayı resetlesin
             fetchRemoteConfigAsync { config ->
-                 val cfg = controlConfig.getLocalConfig()
-                 Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
-                 loadHistory(reset = true)
-                 swipeRefreshLayout.isRefreshing = false
+                 // schedule planner on background to avoid blocking UI
+                 lifecycleScope.launch(Dispatchers.IO) {
+                     try {
+                         val cfg = controlConfig.getLocalConfig()
+                         Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
+                     } catch (e: Exception) {
+                         Log.w(TAG, "Failed to schedule planner during refresh: ${e.message}")
+                     }
+                     withContext(Dispatchers.Main) {
+                         loadHistory(reset = true)
+                         swipeRefreshLayout.isRefreshing = false
+                     }
+                 }
              }
         }
 
         setupSearchListener()
         updateFavoritesToggleUI()
+        updateMenuTextColors()
         loadHistory()
+
+        // Debug-only quick reset button: yükle ve planla
+        if (isDebugBuild()) {
+            val root = findViewById<View>(android.R.id.content) as FrameLayout
+            val fab = FloatingActionButton(this).apply {
+                setImageResource(android.R.drawable.ic_menu_revert)
+                size = FloatingActionButton.SIZE_MINI
+                setOnClickListener {
+                    // Reset history from assets and re-run planner
+                    val hs = HistoryStore(this@MainActivity)
+                    val ok = hs.resetHistoryToDefault()
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val cfg = controlConfig.getLocalConfig()
+                        Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
+                        withContext(Dispatchers.Main) {
+                            loadHistory(reset = true)
+                            Toast.makeText(this@MainActivity, if (ok) "Default loaded & schedules updated" else "Default load failed", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            val params = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.END or Gravity.BOTTOM
+                rightMargin = 24
+                bottomMargin = 24
+            }
+            root.addView(fab, params)
+        }
     }
 
     private fun setupSearchListener() {
@@ -266,11 +336,15 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
     }
 
     private fun updateFavoritesToggleUI() {
-        if (isShowingFavorites) {
-            tvFavoritesToggle.setTextColor(ContextCompat.getColor(this, R.color.purple_700))
-        } else {
-            tvFavoritesToggle.setTextColor(ContextCompat.getColor(this, android.R.color.black))
-        }
+        // Bu fonksiyonun içeriğini sadeleştiriyoruz, renk atamasını updateMenuTextColors yönetecek
+    }
+
+    private fun updateMenuTextColors() {
+        val isNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val colorRes = if (isNightMode) R.color.light_gray_near_white else R.color.text_primary
+        tvFavoritesToggle.setTextColor(ContextCompat.getColor(this, colorRes))
+        val tvCoupons: TextView = findViewById(R.id.tv_coupons)
+        tvCoupons.setTextColor(ContextCompat.getColor(this, colorRes))
     }
 
     // loadHistory artık sayfalamayı destekliyor. reset=true ise baştan yükler.
@@ -342,14 +416,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
     private fun showEmojiEntryDialog(history: NotificationHistory) {
         val input = EditText(this).apply {
-            hint = "Select an emoji..."
+            hint = ""
             setText(history.reaction ?: "")
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE
         }
-        AlertDialog.Builder(this)
-            .setTitle("Choose your reaction")
-            .setMessage("You can use the emoji button on your keyboard.")
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Emoji seçin")
             .setView(input)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton("Kaydet") { _, _ ->
                 val newEmoji = input.text.toString().trim()
                 if (newEmoji.isNotBlank()) {
                     val finalReaction = if (newEmoji == history.reaction) null else newEmoji
@@ -361,8 +435,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
                     }
                 }
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            .setNegativeButton("İptal", null)
+            .create()
+        dialog.setOnShowListener {
+            input.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
+        dialog.show()
     }
 
     private fun showNoteEntryDialog(historyId: Long, originalMessage: String, existingNotes: List<Note>) {

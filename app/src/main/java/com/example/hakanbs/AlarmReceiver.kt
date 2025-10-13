@@ -61,13 +61,22 @@ class AlarmReceiver : BroadcastReceiver() {
         }
 
         val seenIds = historyStore.getSeenSentenceIds()
-        var availableSentences = config.sentences.filter { it.id !in seenIds }
+
+        // Eğer randomDaily etkinse, seçim pool içinden yapılır; değilse tüm sentences içinden
+        val poolSentences: List<RemoteSentence> = if (config.randomDaily.enabled) {
+            // Map pool ids to actual sentences (ignore unknown ids)
+            config.randomDaily.pool.mapNotNull { pid -> config.sentences.find { it.id == pid } }
+        } else {
+            config.sentences.toList()
+        }
+
+        var availableSentences = poolSentences.filter { it.id !in seenIds }
 
         // Eğer gösterilecek cümle kalmadıysa, "seen" listesini temizle ve tekrar baştan gösterime başla
         if (availableSentences.isEmpty()) {
             historyStore.clearSeenSentenceIds()
-            // Yeniden hesapla: şimdi tüm cümleler tekrar kullanılabilir
-            availableSentences = config.sentences.toList()
+            // Yeniden hesapla: şimdi poolSentences içindeki tüm cümleler tekrar kullanılabilir
+            availableSentences = poolSentences.toList()
         }
 
         if (availableSentences.isEmpty()) return null

@@ -10,19 +10,19 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="14sp"
-        android:textColor="#000" />
+        android:textColor="@color/light_gray_near_white" />
 
     <TextView
         android:id="@+id/tv_comment_time"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:textColor="#757575"
+        android:textColor="@color/light_gray_near_white"
         android:paddingTop="4dp" />
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#E0E0E0"
+        android:background="@color/divider"
         android:layout_marginTop="8dp"/>
 </LinearLayout>

@@ -46,6 +46,15 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             return
         }
 
+        // Debug: log config summary
+        try {
+            val overrideList = config.overrides.map { it.time + " -> " + (it.messageId ?: "<none>") }
+            val sentenceIds = config.sentences.map { it.id }
+            Log.d(TAG, "Scheduling with config: enabled=${config.enabled}, overrides=${overrideList.size}, overrideDetails=${overrideList}, totalSentences=${sentenceIds.size}, sentenceIds=${sentenceIds}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to log config summary: ${e.message}")
+        }
+
         cancelAllNotifications()
 
         // 1) Schedule overrides (explicit times from remote config)
@@ -117,6 +126,11 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             messageId?.let { id -> putExtra("EXTRA_MESSAGE_ID", id) }
             imageUrl?.let { url -> putExtra("EXTRA_IMAGE_URL", url) }
         }
+
+        // Debug: hangi messageId ile planlandığını logla
+        val cal = Calendar.getInstance().apply { timeInMillis = timeMillis }
+        Log.d(TAG, "Scheduling alarm for messageId=${messageId ?: "<random>"} imageUrl=${imageUrl ?: "<none>"} at ${cal.get(Calendar.HOUR_OF_DAY)}:${String.format("%02d", cal.get(Calendar.MINUTE))}")
+
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,

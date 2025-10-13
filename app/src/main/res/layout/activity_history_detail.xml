@@ -19,13 +19,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:textColor="#666"
+        android:textColor="@color/text_secondary"
         android:paddingBottom="12dp"/>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#E0E0E0"/>
+        android:background="@color/divider"/>
 
     <TextView
         android:layout_width="match_parent"

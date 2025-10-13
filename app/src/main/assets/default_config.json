@@ -1,0 +1,175 @@
+{
+  "enabled": true,
+  "startHour": 9,
+  "endHour": 23,
+  "timesPerDay": 8,
+  "sentences": [
+    {
+      "id": "M0016",
+      "text": "Bugün de her zamanki gibi aklımdasın. Sadece bil istedim.",
+      "isQuote": false,
+      "context": "Küçük Bir Merhaba",
+      "imageUrl": "https://picsum.photos/id/11/800/400",
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0017",
+      "text": "Seninle konuşunca tüm dertlerimi unutuyorum.",
+      "isQuote": false,
+      "context": "Terapi Gibisin",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0018",
+      "text": "Birlikte aştığımız her engel, sevgimizi daha da güçlendiriyor.",
+      "isQuote": true,
+      "context": "Hmmm",
+      "imageUrl": "https://64.media.tumblr.com/ebd61b4a90a936b59029045225c2b242/1a985a1f7c53dbb0-5c/s1280x1920/3d7785baf027ffda1e507640c23494f273f97a0d.gif",
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M010",
+      "text": "Her şey için teşekkür ederim. Varlığın en büyük hediye.",
+      "isQuote": false,
+      "context": "Teşekkür",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "AUDIO_001",
+      "text": "Bu sana özel bir sesli not...",
+      "isQuote": false,
+      "context": "Sesli Not",
+      "imageUrl": null,
+      "audioUrl": "https://storage.googleapis.com/exoplayer-test-media-0/play.mp3",
+      "videoUrl": null
+    },
+    {
+      "id": "VIDEO_001",
+      "text": "Birlikte izlemek için kısa bir video!",
+      "isQuote": false,
+      "context": "Video Anısı",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
+    },
+    {
+      "id": "M0020",
+      "text": "Seninle öğrendim, sevginin bir insanı nasıl daha güçlü yapabildiğini.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0021",
+      "text": "Gözlerine bakmak bile içimi titretiyor. Titreşim önemli :)",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0022",
+      "text": "Gözlerine her baktığımda, ait olduğum yer burası diyorum.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0023",
+      "text": "Çok iyi bir annesin. Her ne kadar zorlanıyor olsak da, oğlumuzun hayatına kattığın her renk için teşekkür ederim.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0024",
+      "text": "Bazen sadece yüzüne bakıyorum ve ne kadar şanslı olduğumu fark edip gülümsüyorum.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0025",
+      "text": "Seninle yan yanayken hissettiğim o sıcaklık,o sevgi duygusunu hiçbir şeye değişmem.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0026",
+      "text": "Harika bir eşsin. Kendine çoğu zaman haksızlık etsen bile, ben harika bir eş olduğunu düşünüyorum.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    },
+    {
+      "id": "M0027",
+      "text": "Sana sarılmayı çok seviyorum.",
+      "isQuote": false,
+      "context": "Çünkü:",
+      "imageUrl": null,
+      "audioUrl": null,
+      "videoUrl": null
+    }
+  ],
+  "overrides": [],
+  "randomDaily": {
+    "enabled": true,
+    "countPerDay": 1,
+    "pool": []
+  },
+  "activityTitle": "Anı Akışımız",
+  "emptyMessage": "Yeni anılarımız yakında burada olacak... 💌",
+  "decisionWheel": {
+    "title": "Bugün Ne Yapsak?",
+    "options": [
+      "Favori Filmimizi İzleyelim",
+      "Yeni Bir Tarif Deneyelim",
+      "Sahilde Yürüyüşe Çıkalım",
+      "Eski Fotoğraflara Bakalım",
+      "Sadece Sarılıp Müzik Dinleyelim",
+      "Gelecek Tatili Araştıralım"
+    ]
+  },
+  "coupons": [
+    {
+      "id": "coupon_001",
+      "title": "Akşam Yemeği Kuponu",
+      "description": "Bu kupon, bir akşam yemeğini dışarıdan söylememizi sağlar. Seçim sana ait! Ne istersen!"
+    },
+    {
+      "id": "coupon_002",
+      "title": "Salon kadını çizgisi",
+      "description": "Bu kupon, kullandığın gün salonu benim toplamamı, oyuncakları yerlerine koymamı ve salonu süpürmemi sağlar. "
+    },
+    {
+      "id": "coupon_005",
+      "title": "Evde zikir var,siz çıkın isterseniz",
+      "description": "Bu kupon, kullanıldığı gün, oğluşumla birlikte en az iki saat dışarı çıkmamızı sağlar. Ev senin."
+    },
+    {
+      "id": "coupon_006",
+      "title": "Bulaşıklar dağ gibiii :(",
+      "description": "Bu kupon; kullanılan gün, bulaşıkları benim toplamamı,temizleyip bulaşık makinesine dizmemi ve yıkanınca da bulaşık makinesinden çıkarıp yerlerine koymamı sağlar."
+    }
+  ]
+}

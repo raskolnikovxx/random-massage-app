@@ -10,8 +10,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class HistoryStore(context: Context) {
     private val TAG = "HistoryStore"
-    private val historyPrefs: SharedPreferences = context.getSharedPreferences("NotificationHistory", Context.MODE_PRIVATE)
-    private val seenPrefs: SharedPreferences = context.getSharedPreferences("SeenSentenceIds", Context.MODE_PRIVATE)
+    private val appContext: Context = context.applicationContext
+    private val historyPrefs: SharedPreferences = appContext.getSharedPreferences("NotificationHistory", Context.MODE_PRIVATE)
+    private val seenPrefs: SharedPreferences = appContext.getSharedPreferences("SeenSentenceIds", Context.MODE_PRIVATE)
     private val gson = Gson()
 
     companion object {
@@ -22,7 +23,7 @@ class HistoryStore(context: Context) {
     }
 
     private val firestore = FirebaseFirestore.getInstance()
-    private val deviceId: String = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+    private val deviceId: String = Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ANDROID_ID)
     private val HISTORY_LIST_KEY = "history_list"
     private val SEEN_ID_SET_KEY = "seen_id_set"
 
@@ -37,9 +38,63 @@ class HistoryStore(context: Context) {
     }
 
     fun getHistory(): List<NotificationHistory> {
-        val json = historyPrefs.getString(HISTORY_LIST_KEY, null) ?: return emptyList()
+        val json = historyPrefs.getString(HISTORY_LIST_KEY, null)
+        if (json.isNullOrEmpty()) {
+            // Değişiklik: Uygulama ilk açıldığında assets'ten otomatik yükleme yapma.
+            // Eğer kullanıcı veya bir admin elle yüklemek isterse resetHistoryToDefault() kullanılabilir.
+            return emptyList()
+        }
         val type = object : TypeToken<List<NotificationHistory>>() {}.type
         return gson.fromJson(json, type) ?: emptyList()
+    }
+
+    // Yeni: assets/default_config.json içindeki sentences listesini okuyup NotificationHistory listesine çevirir.
+    private fun loadHistoryFromAssets(): List<NotificationHistory> {
+        return try {
+            val input = appContext.assets.open("default_config.json")
+            val size = input.available()
+            val buffer = ByteArray(size)
+            input.read(buffer)
+            input.close()
+            val jsonString = String(buffer, Charsets.UTF_8)
+
+            // RemoteConfig modeli ControlConfig.kt içinde tanımlı
+            val remoteConfig = gson.fromJson(jsonString, RemoteConfig::class.java)
+            val sentences = remoteConfig.sentences
+
+            val now = System.currentTimeMillis()
+            val historyList = sentences.mapIndexed { idx, s ->
+                val stableId = try {
+                    val mid = s.id.ifEmpty { s.text.hashCode().toString() }
+                    var idLong = mid.hashCode().toLong()
+                    if (idLong == Long.MIN_VALUE) idLong = idLong + 1
+                    if (idLong < 0) idLong = -idLong
+                    idLong
+                } catch (e: Exception) {
+                    System.currentTimeMillis() + idx
+                }
+
+                NotificationHistory(
+                    id = stableId,
+                    time = now + idx, // küçük artışlarla zaman ver
+                    messageId = s.id,
+                    message = s.text,
+                    imageUrl = s.imageUrl,
+                    isQuote = s.isQuote,
+                    context = s.context,
+                    reaction = null,
+                    comments = emptyList(),
+                    isPinned = false,
+                    audioUrl = s.audioUrl,
+                    videoUrl = s.videoUrl,
+                    type = ""
+                )
+            }
+            historyList
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load history from assets: ${e.message}")
+            emptyList()
+        }
     }
 
     // Geçmişi güncelleyen temel fonksiyon (reaksiyon ve sabitleme için)
@@ -103,6 +158,20 @@ class HistoryStore(context: Context) {
     private fun saveHistory(historyList: List<NotificationHistory>) {
         val json = gson.toJson(historyList)
         historyPrefs.edit().putString(HISTORY_LIST_KEY, json).apply()
+    }
+
+    /**
+     * Kullanıcıya, uygulamadaki history girişlerini assets/default_config.json içeriği ile
+     * sıfırlama imkanı verir. Döndürür: true ise yükleme başarılı ve kaydedildi.
+     */
+    fun resetHistoryToDefault(): Boolean {
+        val loaded = loadHistoryFromAssets()
+        return if (loaded.isNotEmpty()) {
+            saveHistory(loaded)
+            true
+        } else {
+            false
+        }
     }
 
     // --- Firestore Yazma Mantığı ---
