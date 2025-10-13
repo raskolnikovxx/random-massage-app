@@ -293,33 +293,39 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         updateMenuTextColors()
         loadHistory()
 
-        // Debug-only quick reset button: yükle ve planla
-        if (isDebugBuild()) {
-            val root = findViewById<View>(android.R.id.content) as FrameLayout
-            val fab = FloatingActionButton(this).apply {
-                setImageResource(android.R.drawable.ic_menu_revert)
-                size = FloatingActionButton.SIZE_MINI
-                setOnClickListener {
-                    // Reset history from assets and re-run planner
-                    val hs = HistoryStore(this@MainActivity)
-                    val ok = hs.resetHistoryToDefault()
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val cfg = controlConfig.getLocalConfig()
-                        Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
-                        withContext(Dispatchers.Main) {
-                            loadHistory(reset = true)
-                            Toast.makeText(this@MainActivity, if (ok) "Default loaded & schedules updated" else "Default load failed", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+        // Ayarlar butonu (her zaman görünür, debug-only FAB tamamen kaldırıldı)
+        val root = findViewById<View>(android.R.id.content) as FrameLayout
+        val fab = FloatingActionButton(this).apply {
+            setImageResource(android.R.drawable.ic_menu_preferences) // settings ikonu
+            size = FloatingActionButton.SIZE_MINI
+            setOnClickListener {
+                // Tema seçimi için dialog
+                val items = arrayOf("Sistem Teması", "Açık Mod", "Koyu Mod")
+                val currentMode = when (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) {
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES -> 2
+                    android.content.res.Configuration.UI_MODE_NIGHT_NO -> 1
+                    else -> 0
                 }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Tema Seçimi")
+                    .setSingleChoiceItems(items, currentMode) { dialog, which ->
+                        when (which) {
+                            0 -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+                            1 -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+                            2 -> androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+                        }
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton("İptal", null)
+                    .show()
             }
-            val params = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.END or Gravity.BOTTOM
-                rightMargin = 24
-                bottomMargin = 24
-            }
-            root.addView(fab, params)
         }
+        val params = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.END or Gravity.BOTTOM
+            rightMargin = 24
+            bottomMargin = 24
+        }
+        root.addView(fab, params)
     }
 
     private fun setupSearchListener() {

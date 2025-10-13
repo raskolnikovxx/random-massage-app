@@ -1,18 +1,10 @@
 {
   "enabled": true,
-  "startHour": 9,
+  "startHour": 22,
   "endHour": 23,
-  "timesPerDay": 8,
+  "timesPerDay": 1,
   "sentences": [
-    {
-      "id": "M0016",
-      "text": "Bugün de her zamanki gibi aklımdasın. Sadece bil istedim.",
-      "isQuote": false,
-      "context": "Küçük Bir Merhaba",
-      "imageUrl": "https://picsum.photos/id/11/800/400",
-      "audioUrl": null,
-      "videoUrl": null
-    },
+
     {
       "id": "M0017",
       "text": "Seninle konuşunca tüm dertlerimi unutuyorum.",
@@ -40,24 +32,7 @@
       "audioUrl": null,
       "videoUrl": null
     },
-    {
-      "id": "AUDIO_001",
-      "text": "Bu sana özel bir sesli not...",
-      "isQuote": false,
-      "context": "Sesli Not",
-      "imageUrl": null,
-      "audioUrl": "https://storage.googleapis.com/exoplayer-test-media-0/play.mp3",
-      "videoUrl": null
-    },
-    {
-      "id": "VIDEO_001",
-      "text": "Birlikte izlemek için kısa bir video!",
-      "isQuote": false,
-      "context": "Video Anısı",
-      "imageUrl": null,
-      "audioUrl": null,
-      "videoUrl": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4"
-    },
+
     {
       "id": "M0020",
       "text": "Seninle öğrendim, sevginin bir insanı nasıl daha güçlü yapabildiğini.",
@@ -142,12 +117,12 @@
   "decisionWheel": {
     "title": "Bugün Ne Yapsak?",
     "options": [
-      "Favori Filmimizi İzleyelim",
+      "İstediğin bir filmi izleyelim",
       "Yeni Bir Tarif Deneyelim",
-      "Sahilde Yürüyüşe Çıkalım",
-      "Eski Fotoğraflara Bakalım",
+      "Parkta Yürüyüşe Çıkalım",
+      "Sevişelim?",
       "Sadece Sarılıp Müzik Dinleyelim",
-      "Gelecek Tatili Araştıralım"
+      "Gelecek Tatili Planlayalım"
     ]
   },
   "coupons": [

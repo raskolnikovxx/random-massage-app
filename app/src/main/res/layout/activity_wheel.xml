@@ -23,7 +23,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Günün Kararı"
+                android:text="Karar anı.. Tıtıtıtımmmm"
                 android:textAlignment="center"
                 android:textSize="24sp"
                 android:textStyle="bold"
@@ -41,7 +41,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="Çarkı Çevir!"
+                android:text="Umarım ki; 'sevişelim' çıkar..!"
                 android:textSize="18sp"
                 style="@style/Widget.Material3.Button"/>
         </LinearLayout>
@@ -57,7 +57,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Bugünün Seçimi"
+                android:text="Haftanın Seçimi"
                 android:textAlignment="center"
                 android:textSize="24sp"
                 android:textStyle="bold"

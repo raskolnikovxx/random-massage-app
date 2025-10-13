@@ -1,18 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:background="#FAFAFA"
+    android:gravity="center">
 
     <TextView
         android:id="@+id/scoreText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Score: 0"
-        android:textSize="24sp"
-        android:layout_gravity="center"
-        android:layout_marginBottom="16dp"/>
+        android:textSize="22sp"
+        android:textColor="#222"
+        android:gravity="center"
+        android:fontFamily="sans-serif-medium"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/rewardHintText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="200 puan alırsan büyük bir ödül alacaksın :))"
+        android:textSize="16sp"
+        android:textColor="#7CB342"
+        android:gravity="center"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="0dp"/>
+
+    <LinearLayout
+        android:id="@+id/couponsList"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingLeft="32dp"
+        android:paddingRight="32dp"
+        android:gravity="center_horizontal"/>
 
     <GridLayout
         android:id="@+id/gridLayout"
@@ -21,49 +46,61 @@
         android:layout_weight="1"
         android:columnCount="15"
         android:rowCount="15"
-        android:background="@android:color/black"
-        android:padding="2dp"/>
+        android:background="#E0E0E0"
+        android:padding="8dp"
+        android:layout_gravity="center"/>
 
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:layout_marginTop="16dp">
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp">
 
-        <Button
+        <ImageButton
             android:id="@+id/buttonUp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="↑"/>
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/round_button_bg"
+            android:src="@drawable/ic_arrow_up"
+            android:tint="#7CB342"
+            android:layout_gravity="center"/>
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center">
 
-            <Button
+            <ImageButton
                 android:id="@+id/buttonLeft"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="←"/>
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/round_button_bg"
+                android:src="@drawable/ic_arrow_left"
+                android:tint="#7CB342"/>
 
             <Space
-                android:layout_width="48dp"
+                android:layout_width="32dp"
                 android:layout_height="wrap_content"/>
 
-            <Button
+            <ImageButton
                 android:id="@+id/buttonRight"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="→"/>
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/round_button_bg"
+                android:src="@drawable/ic_arrow_right"
+                android:tint="#7CB342"/>
         </LinearLayout>
 
-        <Button
+        <ImageButton
             android:id="@+id/buttonDown"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="↓"/>
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/round_button_bg"
+            android:src="@drawable/ic_arrow_down"
+            android:tint="#7CB342"
+            android:layout_gravity="center"/>
     </LinearLayout>
-
 </LinearLayout>
