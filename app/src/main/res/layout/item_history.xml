@@ -60,33 +60,25 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_marginStart="16dp"
-            android:contentDescription="Tepki Ekle"
+            android:contentDescription="@string/desc_react_heart"
             android:src="@drawable/ic_react_heart"
             app:layout_constraintBottom_toBottomOf="@id/tv_favorite_toggle"
             app:layout_constraintStart_toEndOf="@id/tv_favorite_toggle"
             app:layout_constraintTop_toTopOf="@id/tv_favorite_toggle" />
 
-        <ImageView
-            android:id="@+id/iv_add_comment"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginStart="16dp"
-            android:contentDescription="Yorum Ekle"
-            android:src="@drawable/ic_comment"
-            app:layout_constraintBottom_toBottomOf="@id/iv_react_heart"
-            app:layout_constraintStart_toEndOf="@id/iv_react_heart"
-            app:layout_constraintTop_toTopOf="@id/iv_react_heart" />
+        <!-- iv_add_comment kaldırıldı (kullanılmıyor) -->
 
         <ImageView
             android:id="@+id/iv_play_audio"
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_marginStart="16dp"
+            android:contentDescription="@string/desc_play_audio"
             android:src="@drawable/ic_play_audio"
             android:visibility="gone"
-            app:layout_constraintBottom_toBottomOf="@+id/iv_add_comment"
-            app:layout_constraintStart_toEndOf="@+id/iv_add_comment"
-            app:layout_constraintTop_toTopOf="@+id/iv_add_comment"
+            app:layout_constraintBottom_toBottomOf="@id/iv_react_heart"
+            app:layout_constraintStart_toEndOf="@id/iv_react_heart"
+            app:layout_constraintTop_toTopOf="@id/iv_react_heart"
             tools:visibility="visible" />
 
         <TextView
@@ -121,7 +113,7 @@
             android:layout_width="0dp"
             android:layout_height="200dp"
             android:layout_marginTop="16dp"
-            android:contentDescription="Bildirim görseli"
+            android:contentDescription="@string/desc_history_image"
             android:scaleType="centerCrop"
             android:visibility="gone"
             app:layout_constraintEnd_toEndOf="parent"
@@ -134,6 +126,7 @@
             android:id="@+id/iv_play_video"
             android:layout_width="48dp"
             android:layout_height="48dp"
+            android:contentDescription="@string/desc_play_video"
             android:src="@drawable/ic_play_video"
             android:visibility="gone"
             app:layout_constraintBottom_toBottomOf="@+id/iv_history_image"

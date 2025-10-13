@@ -239,8 +239,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
 
         swipeRefreshLayout.setOnRefreshListener {
             // Yenileme her zaman sayfalamayı resetlesin
-            fetchRemoteConfig()
-            loadHistory(reset = true)
+            fetchRemoteConfigAsync { config ->
+                 val cfg = controlConfig.getLocalConfig()
+                 Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
+                 loadHistory(reset = true)
+                 swipeRefreshLayout.isRefreshing = false
+             }
         }
 
         setupSearchListener()
@@ -312,13 +316,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         isLoadingMore = false
     }
 
-    private fun fetchRemoteConfig() {
+    private fun fetchRemoteConfigAsync(onComplete: ((RemoteConfig) -> Unit)? = null) {
         lifecycleScope.launch(Dispatchers.IO) {
             controlConfig.fetchConfig()
             val config = controlConfig.getLocalConfig()
             Planner(this@MainActivity, config).scheduleAllNotifications(false)
             withContext(Dispatchers.Main) {
                 loadHistory()
+                onComplete?.invoke(config)
             }
         }
     }

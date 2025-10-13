@@ -106,7 +106,7 @@ class HistoryAdapter(
         private val tvReaction: TextView = itemView.findViewById(R.id.tv_history_reaction)
         private val ivHeart: ImageView = itemView.findViewById(R.id.iv_react_heart)
         private val tvFavorite: TextView = itemView.findViewById(R.id.tv_favorite_toggle)
-        private val ivAddComment: ImageView = itemView.findViewById(R.id.iv_add_comment)
+
         private val tvComment: TextView = itemView.findViewById(R.id.tv_comment_text)
         private val ivPlayAudio: ImageView = itemView.findViewById(R.id.iv_play_audio)
         private val ivPlayVideo: ImageView = itemView.findViewById(R.id.iv_play_video)
@@ -152,7 +152,8 @@ class HistoryAdapter(
             // Clicks
             tvFavorite.setOnClickListener { listener.onFavoriteToggled(history, !history.isPinned) }
             ivHeart.setOnClickListener { listener.onReactClicked(history) }
-            ivAddComment.setOnClickListener { listener.onCommentClicked(history.id, history.message, null) }
+            // ivAddComment kaldırıldı çünkü layout'tan silindi. Yorum açma işlevi gerekiyorsa
+            // tvComment veya itemView click'ine bağlanabilir.
 
             // Media
             ivImage.visibility = View.GONE
