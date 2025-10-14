@@ -110,21 +110,20 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     // --- DÜŞMANLAR ---
-    // YENİ: isStalker bayrağı eklendi
     private data class Enemy(
         var x: Float, var y: Float, var vx: Float, var vy: Float, val radius: Float,
         val isHunter: Boolean = false,
-        val isStalker: Boolean = false, // YENİ
+        val isStalker: Boolean = false,
         val isMegaHunter: Boolean = false,
         var directionChangeTimer: Int = 0
     )
     private val enemies = mutableListOf<Enemy>()
     private val enemyPaint = Paint().apply { color = Color.GREEN }
     private val hunterPaint = Paint().apply { color = Color.MAGENTA }
-    private val stalkerPaint = Paint().apply { color = Color.CYAN } // YENİ: Stalker için boya
+    private val stalkerPaint = Paint().apply { color = Color.CYAN }
     private val megaHunterPaint = Paint().apply { color = Color.rgb(255, 100, 0) }
     private var hunterBoss: Enemy? = null
-    private var stalkerBoss: Enemy? = null // YENİ
+    private var stalkerBoss: Enemy? = null
     private var megaHunterBoss: Enemy? = null
     private var bossCount = 1
 
@@ -146,11 +145,28 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private data class ScoreBubble(var x: Float, var y: Float, val text: String, var alpha: Float = 1f, var dy: Float = -2f)
     private val scoreBubbles = mutableListOf<ScoreBubble>()
 
+    // GAME OVER butonu için alan
+    private val gameOverButtonRect = RectF()
+
+    // HUD için kullanılacak Paint nesnesi
+    private val hudPaint = Paint().apply {
+        color = Color.WHITE
+        textSize = 48f
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+
     init {
         post {
             setupNewGame()
             handler.post(gameLoop)
         }
+    }
+
+    private fun isSafeSpawn(x: Float, y: Float, safeDistance: Float = 120f): Boolean {
+        val dx = x - playfield.left
+        val dy = y - playfield.top
+        return dx * dx + dy * dy > safeDistance * safeDistance
     }
 
     private fun setupNewGame() {
@@ -163,45 +179,86 @@ class GalleryRescueGameView @JvmOverloads constructor(
         currentLine.clear()
         enemies.clear()
         bossCount = 1
-        // Normal düşmanları oluştur
+        // Düşmanları güvenli mesafede başlat
         repeat(3) {
+            var ex: Float
+            var ey: Float
+            do {
+                ex = playfield.centerX() + Random.nextFloat() * 200f - 100f
+                ey = playfield.centerY() + Random.nextFloat() * 200f - 100f
+            } while (!isSafeSpawn(ex, ey))
             enemies.add(
                 Enemy(
-                    playfield.centerX() + Random.nextFloat() * 200f - 100f,
-                    playfield.centerY() + Random.nextFloat() * 200f - 100f,
+                    ex,
+                    ey,
                     (Random.nextFloat() - 0.5f) * 8f,
                     (Random.nextFloat() - 0.5f) * 8f,
                     18f
                 )
             )
         }
-        // Avcı (Hunter) boss'u oluştur
+        // 2 tane Avcı (Hunter) boss
+        var hx: Float
+        var hy: Float
+        do {
+            hx = playfield.centerX()
+            hy = playfield.centerY()
+        } while (!isSafeSpawn(hx, hy, 180f))
         hunterBoss = Enemy(
-            playfield.centerX(), playfield.centerY(),
+            hx, hy,
             2f, 2f, 25f, isHunter = true
         )
         enemies.add(hunterBoss!!)
-
-        // YENİ: Takipçi (Stalker) boss'u oluştur
+        do {
+            hx = playfield.centerX() - 120f
+            hy = playfield.centerY() + 120f
+        } while (!isSafeSpawn(hx, hy, 180f))
+        val hunterBoss2 = Enemy(
+            hx, hy,
+            -2f, 2f, 25f, isHunter = true
+        )
+        enemies.add(hunterBoss2)
+        // 1 tane Stalker boss -> sadece 1 tane olacak
+        var sx: Float
+        var sy: Float
+        do {
+            sx = playfield.right
+            sy = playfield.bottom
+        } while (!isSafeSpawn(sx, sy, 180f))
         stalkerBoss = Enemy(
-            playfield.right, playfield.bottom, // Başlangıç konumu
-            -playerSpeed * 0.8f, 0f, // Başlangıç hızı
-            22f, // Boyutu
+            sx, sy,
+            -playerSpeed * 0.8f, 0f,
+            22f,
             isStalker = true
         )
         enemies.add(stalkerBoss!!)
-
-        // Mega Avcı (Mega Hunter) boss'u oluştur
+        // 2 tane Mega Hunter boss
+        var mx: Float
+        var my: Float
+        do {
+            mx = playfield.centerX() + 100f
+            my = playfield.centerY() - 100f
+        } while (!isSafeSpawn(mx, my, 200f))
         megaHunterBoss = Enemy(
-            playfield.centerX() + 100f, playfield.centerY() - 100f,
+            mx, my,
             1f, -1f,
             75f,
             isMegaHunter = true,
             directionChangeTimer = 60
         )
         enemies.add(megaHunterBoss!!)
-
-
+        do {
+            mx = playfield.centerX() - 100f
+            my = playfield.centerY() + 100f
+        } while (!isSafeSpawn(mx, my, 200f))
+        val megaHunterBoss2 = Enemy(
+            mx, my,
+            -1f, 1f,
+            75f,
+            isMegaHunter = true,
+            directionChangeTimer = 90
+        )
+        enemies.add(megaHunterBoss2)
         backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
         lives = 3
         isDrawingLine = false
@@ -214,6 +271,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
         revealPercent = 0f
         startTimer()
         invalidate()
+        handler.removeCallbacks(gameLoop)
+        handler.post(gameLoop)
     }
 
     private fun startTimer() {
@@ -244,9 +303,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (gameOver || gameWon) {
-            if (event.action == MotionEvent.ACTION_DOWN) setupNewGame()
-            return true
+        // Tekrar Oyna butonu için kontrol
+        if ((gameOver || gameWon) && event.action == MotionEvent.ACTION_DOWN) {
+            if (gameOverButtonRect.contains(event.x, event.y)) {
+                setupNewGame()
+                invalidate()
+                return true
+            }
         }
 
         val touchX = event.x
@@ -275,6 +338,12 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     currentLine.add(PointF(clampedX, clampedY))
                     if (currentLine.size > 2 && isOnEdge(clampedX, clampedY)) {
                         captureAndRevealArea()
+                        val finalPosition = snapToWall(clampedX, clampedY)
+                        playerX = finalPosition.x
+                        playerY = finalPosition.y
+                        playerVx = 0f
+                        playerVy = 0f
+
                         isDrawingLine = false
                         currentLine.clear()
                     }
@@ -284,9 +353,19 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 playerVx = 0f
                 playerVy = 0f
 
-                if (isDrawingLine && currentLine.size > 2 && isOnEdge(touchX, touchY)) {
-                    captureAndRevealArea()
+                if (isDrawingLine) {
+                    val clampedX = touchX.coerceIn(playfield.left, playfield.right)
+                    val clampedY = touchY.coerceIn(playfield.top, playfield.bottom)
+                    currentLine.add(PointF(clampedX, clampedY))
+
+                    if (currentLine.size > 2 && isOnEdge(clampedX, clampedY)) {
+                        captureAndRevealArea()
+                        val finalPosition = snapToWall(clampedX, clampedY)
+                        playerX = finalPosition.x
+                        playerY = finalPosition.y
+                    }
                 }
+
                 isDrawingLine = false
                 currentLine.clear()
             }
@@ -327,12 +406,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-
-    private fun getRevealPercent(): Float {
-        val revealedArea = getRevealedArea()
-        val totalArea = playfield.width() * playfield.height()
-        return if (totalArea > 0f) (revealedArea / totalArea * 100f) else 0f
-    }
 
     private fun getRevealedArea(): Float {
         if (revealedPaths.isEmpty()) return 0f
@@ -406,7 +479,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
             scoreBubbles.add(ScoreBubble(playerX, playerY - 40f, "+$areaScore"))
             val enemiesToRemove = mutableListOf<Enemy>()
             for (enemy in enemies) {
-                // YENİ: Stalker'ın da hapsedilemeyeceğini belirt
                 if (enemy.isHunter || enemy.isStalker || enemy.isMegaHunter) continue
                 val pathBounds = RectF()
                 capturedPath.computeBounds(pathBounds, true)
@@ -421,12 +493,18 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 revealPercent = (totalRevealedArea / totalPlayfieldArea) * 100f
             }
             if (revealPercent >= winPercentage) {
+                val fullPath = Path()
+                fullPath.addRect(playfield, Path.Direction.CW)
+                revealedPaths.clear()
+                revealedPaths.add(fullPath)
+                totalRevealedArea = playfield.width() * playfield.height()
+                revealPercent = 100f
                 gameWon = true
                 score += timerSeconds * 100L
                 timerHandler.removeCallbacksAndMessages(null)
+                moveEnemiesOffScreen()
             }
         }
-        invalidate()
     }
 
     private fun isOnEdge(x: Float, y: Float, tolerance: Float = 15f): Boolean {
@@ -437,22 +515,36 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun snapToWall(x: Float, y: Float): PointF {
-        return PointF()
+        val distToLeft = kotlin.math.abs(x - playfield.left)
+        val distToRight = kotlin.math.abs(x - playfield.right)
+        val distToTop = kotlin.math.abs(y - playfield.top)
+        val distToBottom = kotlin.math.abs(y - playfield.bottom)
+
+        val minDistance = minOf(distToLeft, distToRight, distToTop, distToBottom)
+
+        return when (minDistance) {
+            distToLeft -> PointF(playfield.left, y.coerceIn(playfield.top, playfield.bottom))
+            distToRight -> PointF(playfield.right, y.coerceIn(playfield.top, playfield.bottom))
+            distToTop -> PointF(x.coerceIn(playfield.left, playfield.right), playfield.top)
+            else -> PointF(x.coerceIn(playfield.left, playfield.right), playfield.bottom)
+        }
     }
 
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         backgroundBitmap?.let { bmp ->
+            val paint = Paint()
+            paint.isAntiAlias = true
+            paint.alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
             for (path in revealedPaths) {
                 canvas.withClip(path) {
-                    drawBitmap(bmp, null, playfield, null)
+                    drawBitmap(bmp, null, playfield, paint)
                 }
             }
         }
         canvas.drawRect(playfield, borderPaint)
         for (enemy in enemies) {
-            // YENİ: Stalker'ı farklı renkte çiz
             val paintToUse = when {
                 enemy.isHunter -> hunterPaint
                 enemy.isStalker -> stalkerPaint
@@ -484,23 +576,25 @@ class GalleryRescueGameView @JvmOverloads constructor(
             }
         }
 
-        val hudPaint = Paint().apply {
-            color = Color.WHITE
-            textSize = 54f
-            isAntiAlias = true
-            style = Paint.Style.FILL
-            setShadowLayer(6f, 2f, 2f, Color.BLACK)
+        // Bu kısım artık sınıfın başka bir yerinde tanımlı olduğu için silindi
+        // val revealedArea = getRevealedArea()
+        // val totalArea = playfield.width() * playfield.height()
+        // val percent = if (totalArea > 0f) (revealedArea / totalArea * 100f).coerceIn(0f, 100f) else 0f
+        val percent = revealPercent // Doğrudan revealPercent'i kullan
+
+        // HUD'u onDraw'un sonunda, her şeyin üstünde çiz
+        if (!gameWon && !gameOver) {
+            val hudTextPaint = Paint(hudPaint).apply { textAlign = Paint.Align.LEFT }
+            canvas.drawText("CAN: $lives", 50f, 80f, hudTextPaint)
+            val scoreText = "SKOR: $score"
+            hudTextPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText(scoreText, width / 2f, 80f, hudTextPaint)
+            hudTextPaint.textAlign = Paint.Align.RIGHT
+            canvas.drawText("ZAMAN: $timerSeconds", width - 50f, 80f, hudTextPaint)
+            canvas.drawText("%${percent.toInt()}", width - 50f, 140f, hudTextPaint)
         }
-        val percent = getRevealPercent()
-        val hudTextPaint = Paint(hudPaint)
-        hudTextPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText("CAN: $lives", 50f, 80f, hudTextPaint)
-        val scoreText = "SKOR: $score"
-        hudTextPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(scoreText, width / 2f, 80f, hudTextPaint)
-        hudTextPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("ZAMAN: $timerSeconds", width - 50f, 80f, hudTextPaint)
-        canvas.drawText("%${percent.toInt()}", width - 50f, 140f, hudTextPaint)
+
+
         val bubblePaint = Paint().apply {
             color = Color.YELLOW
             textSize = 48f
@@ -517,9 +611,45 @@ class GalleryRescueGameView @JvmOverloads constructor(
             canvas.drawText(bubble.text, bubble.x, bubble.y, bubblePaint)
             if (bubble.alpha <= 0f) iterator.remove()
         }
+        if (gameOver) {
+            val centerX = width / 2f
+            val centerY = height / 2f
+            val paint = Paint().apply {
+                color = Color.RED
+                textSize = 120f
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+                setShadowLayer(12f, 0f, 0f, Color.BLACK)
+            }
+            canvas.drawText("GAME OVER", centerX, centerY - 100f, paint)
+
+            // Tekrar Oyna Butonu
+            val buttonPaint = Paint().apply { color = Color.DKGRAY; style = Paint.Style.FILL }
+            val buttonTextPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 60f
+                textAlign = Paint.Align.CENTER
+            }
+            gameOverButtonRect.set(centerX - 250f, centerY + 50f, centerX + 250f, centerY + 200f)
+            canvas.drawRect(gameOverButtonRect, buttonPaint)
+            canvas.drawText("Tekrar Oyna", centerX, centerY + 135f, buttonTextPaint)
+
+            return
+        }
+        if (gameWon) {
+            val centerX = width / 2f
+            val centerY = height / 2f
+            val paint = Paint().apply {
+                color = Color.GREEN
+                textSize = 100f
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+                setShadowLayer(12f, 0f, 0f, Color.BLACK)
+            }
+            canvas.drawText("OYUN TAMAMLANDI!", centerX, centerY, paint)
+        }
     }
 
-    // DEĞİŞTİRİLDİ: Artık tüm boss türlerini güncelliyor
     private fun updateEnemies() {
         if (revealPercent >= 50f && bossCount < 3) {
             // ...
@@ -529,60 +659,44 @@ class GalleryRescueGameView @JvmOverloads constructor(
         for (enemy in enemies) {
             when {
                 enemy.isHunter -> updateHunter(enemy)
-                enemy.isStalker -> updateStalker(enemy) // YENİ
+                enemy.isStalker -> updateStalker(enemy)
                 enemy.isMegaHunter -> updateMegaHunter(enemy)
                 else -> updateMinion(enemy)
             }
         }
     }
 
-    // YENİ: Stalker boss'un özel hareket mantığı
     private fun updateStalker(stalker: Enemy) {
         if (isDrawingLine) {
-            // Oyuncu çizim yaparken Stalker durur.
             stalker.vx = 0f
             stalker.vy = 0f
             return
         }
-
-        // Oyuncuya doğru duvar üzerinde hareket et
         val dx = playerX - stalker.x
         val dy = playerY - stalker.y
-
         val currentEdge = getEdgeFromPoint(PointF(stalker.x, stalker.y))
         val playerEdge = getEdgeFromPoint(PointF(playerX, playerY))
-
-        // Hareket yönünü belirle
         if (currentEdge == playerEdge) {
-            // Eğer aynı duvardaysalar, direkt takip et
             if (currentEdge == Edge.TOP || currentEdge == Edge.BOTTOM) {
                 stalker.vy = 0f
                 stalker.vx = playerSpeed * 0.8f * Math.signum(dx)
-            } else { // LEFT veya RIGHT
+            } else {
                 stalker.vx = 0f
                 stalker.vy = playerSpeed * 0.8f * Math.signum(dy)
             }
         } else {
-            // Farklı duvarlardaysalar, en yakın köşeye git. Mevcut hızını koru.
-            // Bu mantık, stalker'ın köşeye ulaştığında yön değiştirmesiyle çalışır.
             if (stalker.vx == 0f && stalker.vy == 0f) {
                 if(currentEdge == Edge.TOP || currentEdge == Edge.BOTTOM) stalker.vx = playerSpeed * 0.8f
                 else stalker.vy = playerSpeed * 0.8f
             }
         }
-
         stalker.x += stalker.vx
         stalker.y += stalker.vy
-
-        // Duvar sınırlarında kalmasını sağla
         stalker.x = stalker.x.coerceIn(playfield.left, playfield.right)
         stalker.y = stalker.y.coerceIn(playfield.top, playfield.bottom)
-
         val onCorner = (stalker.x == playfield.left || stalker.x == playfield.right) &&
                 (stalker.y == playfield.top || stalker.y == playfield.bottom)
-
         if (onCorner) {
-            // Köşeye ulaştığında, oyuncunun olduğu duvara göre yönünü akıllıca değiştir
             if(playerEdge == Edge.LEFT || playerEdge == Edge.RIGHT){
                 stalker.vx = 0f
                 stalker.vy = playerSpeed * 0.8f * Math.signum(playerY - stalker.y)
@@ -592,7 +706,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
             }
         }
     }
-
 
     private fun updateHunter(hunter: Enemy) {
         val hunterAggroSpeed = 7f
@@ -691,11 +804,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-    // YENİ: Merkezi çarpışma kontrolü
     private fun checkCollisions() {
         if(running.not()) return
 
-        // Çizgiye çarpma
         if (isDrawingLine && currentLine.size > 1) {
             for (enemy in enemies) {
                 for (i in 0 until currentLine.size - 1) {
@@ -709,10 +820,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 }
             }
         }
-        // Oyuncuya çarpma (duvar üzerindeyken)
         else {
             for (enemy in enemies) {
-                // Sadece Stalker duvar üzerindeyken oyuncuya çarpabilir
                 if (enemy.isStalker) {
                     val dx = enemy.x - playerX
                     val dy = enemy.y - playerY
@@ -725,7 +834,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-    // YENİ: Can kaybetme ve sıfırlama işlemlerini merkezileştiren fonksiyon
     private fun handlePlayerHit() {
         lives--
         isDrawingLine = false
@@ -740,9 +848,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-    // Bu fonksiyon artık checkCollisions içinde yönetiliyor.
     private fun checkEnemyLineCollision() {
-        // Bu fonksiyon artık kullanılmıyor. gameLoop'tan çağrısını silebiliriz.
+        // Bu fonksiyon artık checkCollisions içinde yönetiliyor.
     }
 
     private fun distanceToSegmentSquared(p1: PointF, p2: PointF, p: PointF, returnPoint: Boolean): Pair<Float, PointF?> {
@@ -759,5 +866,39 @@ class GalleryRescueGameView @JvmOverloads constructor(
         val distSq = (p.x - closestX) * (p.x - closestX) + (p.y - closestY) * (p.y - closestY)
         return distSq to closestPoint
     }
-}
 
+    private fun moveEnemiesOffScreen() {
+        // Düşmanları ekran dışına taşı
+        for (enemy in enemies) {
+            enemy.x = -1000f
+            enemy.y = -1000f
+        }
+    }
+
+    // Oyun durumu dinleyicisi için arayüz
+    interface GameStateListener {
+        fun onGameStateChanged(lives: Int, score: Long, timer: Int, revealPercent: Float)
+    }
+
+    private var gameStateListener: GameStateListener? = null
+
+    fun setGameStateListener(listener: GameStateListener) {
+        this.gameStateListener = listener
+    }
+
+    /**
+     * Oyunu yeniden başlatır. Tüm oyun durumunu sıfırlar ve ekrana yansıtır.
+     */
+    fun restartGame() {
+        // Oyunla ilgili tüm değişkenleri başlangıç değerlerine döndür
+        // Örneğin:
+        // lives = initialLives
+        // score = 0L
+        // timerSeconds = initialTime
+        // revealPercent = 0f
+        // gameOver = false
+        // gameWon = false
+        // ... diğer gerekli sıfırlamalar ...
+        invalidate() // Ekranı yeniden çiz
+    }
+}
