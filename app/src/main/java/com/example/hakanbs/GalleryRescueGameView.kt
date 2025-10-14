@@ -21,8 +21,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyle: Int = 0
 ) : View(context, attrs, defStyle) {
 
-    // --- YENİ YARDIMCI KODLAR ---
-    // Bir noktanın hangi duvarda olduğunu anlamak için.
+    // --- YARDIMCI KODLAR ---
     private enum class Edge { TOP, BOTTOM, LEFT, RIGHT }
 
     private fun getEdgeFromPoint(p: PointF, tolerance: Float = 15f): Edge? {
@@ -33,7 +32,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return null
     }
 
-    // Bir poligonun alanını hesaplamak için (küçük alanı seçmemizi sağlayacak).
     private fun getPolygonArea(points: List<PointF>): Float {
         if (points.size < 3) return 0f
         var area = 0.0
@@ -44,7 +42,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
         return (kotlin.math.abs(area) / 2.0).toFloat()
     }
-    // --- YENİ YARDIMCI KODLARIN SONU ---
+
+    // --- MANUEL KONTROL İÇİN DEĞİŞKENLER ---
+    private val dpadButtons = mutableMapOf<String, RectF>()
+    private val dpadPaint = Paint().apply { color = Color.argb(100, 255, 255, 255) }
+    private var playerSpeed = 10f
+    private var playerVx = 0f
+    private var playerVy = 0f
 
 
     // --- TEMEL OYUN DEĞİŞKENLERİ ---
@@ -88,6 +92,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private val gameLoop = object : Runnable {
         override fun run() {
             if (running) {
+                updatePlayer() // Oyuncu hareketini her frame'de güncelle
                 updateEnemies()
                 checkEnemyLineCollision()
                 invalidate()
@@ -105,7 +110,10 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     private fun setupNewGame() {
         val padding = 40f
-        playfield.set(padding, padding * 2, width - padding, height - padding)
+        playfield.set(padding, padding * 2, width - padding, height - padding - 300f) // YENİ: Tuşlar için altta daha fazla yer bırak
+
+        // Yönlendirme tuşlarını oluştur
+        setupDpadButtons()
 
         playerX = playfield.left
         playerY = playfield.top
@@ -125,10 +133,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 )
             )
         }
-
-        // drawable klasörünüzde "arkaplan_resmi.png" veya ".jpg" adında bir dosya olduğundan emin olun.
         backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
-
         lives = 3
         isDrawingLine = false
         running = true
@@ -136,39 +141,62 @@ class GalleryRescueGameView @JvmOverloads constructor(
         invalidate()
     }
 
+    // DEĞİŞTİRİLDİ: Yön tuşları artık 4 yönlü ve daha büyük.
+    private fun setupDpadButtons() {
+        val buttonSize = 180f // Tuşlar artık daha büyük
+        val gap = 20f
+        val centerX = width / 2f
+        val bottomAreaY = height - buttonSize - gap
+
+        // D-Pad'i ekranın alt ortasına yerleştiriyoruz.
+        dpadButtons["UP"] = RectF(centerX - buttonSize / 2, bottomAreaY - buttonSize, centerX + buttonSize / 2, bottomAreaY)
+        dpadButtons["DOWN"] = RectF(centerX - buttonSize / 2, bottomAreaY, centerX + buttonSize / 2, bottomAreaY + buttonSize)
+        dpadButtons["LEFT"] = RectF(centerX - buttonSize * 1.5f, bottomAreaY, centerX - buttonSize / 2, bottomAreaY + buttonSize)
+        dpadButtons["RIGHT"] = RectF(centerX + buttonSize / 2, bottomAreaY, centerX + buttonSize * 1.5f, bottomAreaY + buttonSize)
+    }
+
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (gameOver) {
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                setupNewGame()
-            }
+            if (event.action == MotionEvent.ACTION_DOWN) setupNewGame()
             return true
         }
 
-        val touchX = event.x.coerceIn(playfield.left, playfield.right)
-        val touchY = event.y.coerceIn(playfield.top, playfield.bottom)
+        val touchX = event.x
+        val touchY = event.y
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                if (!isDrawingLine && isOnEdge(touchX, touchY)) {
+                var buttonPressed = false
+                dpadButtons.forEach { (direction, rect) ->
+                    if (rect.contains(touchX, touchY)) {
+                        movePlayer(direction)
+                        buttonPressed = true
+                    }
+                }
+
+                if (!buttonPressed && !isDrawingLine) {
                     isDrawingLine = true
                     currentLine.clear()
-                    currentLine.add(PointF(touchX, touchY))
+                    currentLine.add(PointF(playerX, playerY))
                 }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (isDrawingLine) {
-                    currentLine.add(PointF(touchX, touchY))
-                    if (currentLine.size > 2 && isOnEdge(touchX, touchY)) {
+                    val clampedX = touchX.coerceIn(playfield.left, playfield.right)
+                    val clampedY = touchY.coerceIn(playfield.top, playfield.bottom)
+                    currentLine.add(PointF(clampedX, clampedY))
+                    if (currentLine.size > 2 && isOnEdge(clampedX, clampedY)) {
                         captureAndRevealArea()
                         isDrawingLine = false
                         currentLine.clear()
                     }
-                } else {
-                    playerX = snapToWall(touchX, touchY).x
-                    playerY = snapToWall(touchX, touchY).y
                 }
             }
             MotionEvent.ACTION_UP -> {
+                playerVx = 0f
+                playerVy = 0f
+
                 if (isDrawingLine && currentLine.size > 2 && isOnEdge(touchX, touchY)) {
                     captureAndRevealArea()
                 }
@@ -180,7 +208,62 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return true
     }
 
-    // DEĞİŞTİRİLDİ: Bu fonksiyon artık duvar köşelerini hesaba katan akıllı bir mantık kullanıyor.
+    // DEĞİŞTİRİLDİ: Oyuncunun hangi duvarda olduğuna göre hareket etmesini sağlar.
+    private fun movePlayer(direction: String) {
+        val edge = getEdgeFromPoint(PointF(playerX, playerY))
+        val onLeft = playerX == playfield.left
+        val onRight = playerX == playfield.right
+        val onTop = playerY == playfield.top
+        val onBottom = playerY == playfield.bottom
+        val onCorner = (onLeft || onRight) && (onTop || onBottom)
+
+        when (direction) {
+            "LEFT" -> if (onTop || onBottom || onCorner) {
+                playerVy = 0f
+                playerVx = -playerSpeed
+            }
+            "RIGHT" -> if (onTop || onBottom || onCorner) {
+                playerVy = 0f
+                playerVx = playerSpeed
+            }
+            "UP" -> if (onLeft || onRight || onCorner) {
+                playerVx = 0f
+                playerVy = -playerSpeed
+            }
+            "DOWN" -> if (onLeft || onRight || onCorner) {
+                playerVx = 0f
+                playerVy = playerSpeed
+            }
+        }
+    }
+
+    // DEĞİŞTİRİLDİ: Oyuncunun hareketini ve köşeye geldiğinde durmasını yönetir.
+    private fun updatePlayer() {
+        if (playerVx == 0f && playerVy == 0f) return
+
+        playerX += playerVx
+        playerY += playerVy
+
+        // Oyuncuyu oyun alanı içinde tut
+        playerX = playerX.coerceIn(playfield.left, playfield.right)
+        playerY = playerY.coerceIn(playfield.top, playfield.bottom)
+
+        // Köşeye ulaşıldı mı kontrol et
+        val onLeft = playerX == playfield.left
+        val onRight = playerX == playfield.right
+        val onTop = playerY == playfield.top
+        val onBottom = playerY == playfield.bottom
+
+        val onCorner = (onLeft || onRight) && (onTop || onBottom)
+
+        if (onCorner) {
+            // Köşeye ulaşıldığında dur. Yeni yön tuşu basımını bekle.
+            playerVx = 0f
+            playerVy = 0f
+        }
+    }
+
+
     private fun captureAndRevealArea() {
         if (currentLine.size < 2) return
 
@@ -194,19 +277,15 @@ class GalleryRescueGameView @JvmOverloads constructor(
             return
         }
 
-        // Eğer çizgi aynı duvarda başlayıp biterse, basitçe kapat.
         if (startEdge == endEdge) {
             val capturedPath = Path()
             capturedPath.moveTo(firstPoint.x, firstPoint.y)
-            for (point in currentLine) {
-                capturedPath.lineTo(point.x, point.y)
-            }
+            for (point in currentLine) capturedPath.lineTo(point.x, point.y)
             capturedPath.close()
             revealedPaths.add(capturedPath)
             return
         }
 
-        // Farklı duvarlar için, köşeleri takip ederek iki olası alan oluştur.
         val topLeft = PointF(playfield.left, playfield.top)
         val topRight = PointF(playfield.right, playfield.top)
         val bottomLeft = PointF(playfield.left, playfield.bottom)
@@ -215,39 +294,32 @@ class GalleryRescueGameView @JvmOverloads constructor(
         val poly1Points = mutableListOf<PointF>().apply { addAll(currentLine) }
         val poly2Points = mutableListOf<PointF>().apply { addAll(currentLine) }
 
-        // Duvarları takip etmek için yardımcı haritalar
         val clockwiseNextCorner = mapOf(Edge.TOP to topRight, Edge.RIGHT to bottomRight, Edge.BOTTOM to bottomLeft, Edge.LEFT to topLeft)
         val clockwiseNextEdge = mapOf(Edge.TOP to Edge.RIGHT, Edge.RIGHT to Edge.BOTTOM, Edge.BOTTOM to Edge.LEFT, Edge.LEFT to Edge.TOP)
 
         val counterClockwiseNextCorner = mapOf(Edge.TOP to topLeft, Edge.LEFT to bottomLeft, Edge.BOTTOM to bottomRight, Edge.RIGHT to topRight)
         val counterClockwiseNextEdge = mapOf(Edge.TOP to Edge.LEFT, Edge.LEFT to Edge.BOTTOM, Edge.BOTTOM to Edge.RIGHT, Edge.RIGHT to Edge.TOP)
 
-        // Poligon 1: Saat yönünde duvarları takip et
         var currentEdge = endEdge
         while (currentEdge != startEdge) {
             clockwiseNextCorner[currentEdge]?.let { poly1Points.add(it) }
             currentEdge = clockwiseNextEdge[currentEdge]!!
         }
 
-        // Poligon 2: Saat yönünün tersinde duvarları takip et
         currentEdge = endEdge
         while (currentEdge != startEdge) {
             counterClockwiseNextCorner[currentEdge]?.let { poly2Points.add(it) }
             currentEdge = counterClockwiseNextEdge[currentEdge]!!
         }
 
-        // Alanları hesapla ve küçük olanı seç (Qix kuralı)
         val area1 = getPolygonArea(poly1Points)
         val area2 = getPolygonArea(poly2Points)
         val pointsToUse = if (area1 < area2) poly1Points else poly2Points
 
-        // Seçilen poligonu Path'e dönüştür
         if (pointsToUse.size >= 3) {
             val capturedPath = Path()
             capturedPath.moveTo(pointsToUse.first().x, pointsToUse.first().y)
-            for (point in pointsToUse) {
-                capturedPath.lineTo(point.x, point.y)
-            }
+            for (point in pointsToUse) capturedPath.lineTo(point.x, point.y)
             capturedPath.close()
             revealedPaths.add(capturedPath)
         }
@@ -295,8 +367,54 @@ class GalleryRescueGameView @JvmOverloads constructor(
             canvas.drawCircle(enemy.x, enemy.y, enemy.radius, enemyPaint)
         }
 
-        if (!isDrawingLine) {
-            canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
+        canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
+
+        // Yön tuşlarını çiz (artık dikdörtgen değil, vektör ok)
+        dpadButtons.forEach { (direction, rect) ->
+            val cx = rect.centerX()
+            val cy = rect.centerY()
+            val size = rect.width().coerceAtMost(rect.height()) * 0.4f
+
+            val arrowPath = Path()
+            when (direction) {
+                "UP" -> {
+                    arrowPath.moveTo(cx, cy - size) // tepe
+                    arrowPath.lineTo(cx - size, cy + size)
+                    arrowPath.lineTo(cx + size, cy + size)
+                    arrowPath.close()
+                }
+                "DOWN" -> {
+                    arrowPath.moveTo(cx, cy + size) // tepe
+                    arrowPath.lineTo(cx - size, cy - size)
+                    arrowPath.lineTo(cx + size, cy - size)
+                    arrowPath.close()
+                }
+                "LEFT" -> {
+                    arrowPath.moveTo(cx - size, cy) // tepe
+                    arrowPath.lineTo(cx + size, cy - size)
+                    arrowPath.lineTo(cx + size, cy + size)
+                    arrowPath.close()
+                }
+                "RIGHT" -> {
+                    arrowPath.moveTo(cx + size, cy) // tepe
+                    arrowPath.lineTo(cx - size, cy - size)
+                    arrowPath.lineTo(cx - size, cy + size)
+                    arrowPath.close()
+                }
+            }
+            canvas.drawPath(arrowPath, Paint().apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+                isAntiAlias = true
+                alpha = 180
+            })
+            // Okun kenarına hafif bir kontur
+            canvas.drawPath(arrowPath, Paint().apply {
+                color = Color.DKGRAY
+                style = Paint.Style.STROKE
+                strokeWidth = 6f
+                isAntiAlias = true
+            })
         }
 
         if (isDrawingLine && currentLine.size > 1) {
