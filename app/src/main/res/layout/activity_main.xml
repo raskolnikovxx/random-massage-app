@@ -34,6 +34,17 @@
             app:layout_constraintStart_toEndOf="@id/tv_homepage"
             app:layout_constraintTop_toTopOf="@id/tv_homepage" />
 
+        <ImageView
+            android:id="@+id/tv_gallery_rescue_game"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="16dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_gallery_rescue"
+            android:contentDescription="Gallery Rescue Oyunu"
+            app:layout_constraintStart_toEndOf="@id/tv_snake_game"
+            app:layout_constraintTop_toTopOf="@id/tv_snake_game" />
+
 
         <!-- Sağ taraftaki butonlar -->
         <TextView

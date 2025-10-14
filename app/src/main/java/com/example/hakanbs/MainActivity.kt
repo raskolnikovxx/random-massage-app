@@ -227,6 +227,10 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
             startActivity(Intent(this, SnakeGameActivity::class.java))
         }
 
+        val galleryRescueGameIcon: ImageView = findViewById(R.id.tv_gallery_rescue_game)
+        galleryRescueGameIcon.setOnClickListener {
+            startActivity(Intent(this, GalleryRescueActivity::class.java))
+        }
 
         val wheelIcon: ImageView = findViewById(R.id.iv_wheel)
         wheelIcon.setOnClickListener {

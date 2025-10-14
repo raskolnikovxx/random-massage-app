@@ -5,6 +5,10 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
+import coil.ImageLoader
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import android.os.Build
 import coil.load
 import com.github.chrisbanes.photoview.PhotoView
 import com.google.android.material.snackbar.Snackbar
@@ -42,7 +46,18 @@ class FullscreenMediaActivity : AppCompatActivity() {
             gifView.visibility = View.VISIBLE
             photoView.visibility = View.GONE
 
-            gifView.load(mediaUrl) {
+            // Coil için özel ImageLoader ile GIF desteğini garanti altına al
+            val imageLoader = ImageLoader.Builder(this)
+                .components {
+                    if (Build.VERSION.SDK_INT >= 28) {
+                        add(ImageDecoderDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                }
+                .build()
+
+            gifView.load(mediaUrl, imageLoader) {
                 crossfade(true)
                 placeholder(R.drawable.ic_image_placeholder)
                 error(R.drawable.ic_image_error)

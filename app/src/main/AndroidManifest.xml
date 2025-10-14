@@ -86,6 +86,8 @@
                 android:value="androidx.startup" />
         </provider>
 
+        <activity android:name="com.example.hakanbs.GalleryRescueActivity" />
+
     </application>
 
 </manifest>
