@@ -16,6 +16,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.graphics.withClip
+import androidx.appcompat.content.res.AppCompatResources
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -127,6 +128,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var megaHunterBoss: Enemy? = null
     private var bossCount = 1
 
+    // Mega boss için sevimli canavar görseli (güvenli yükleme)
+    private val monsterDrawable = AppCompatResources.getDrawable(context, R.drawable.monster_cute)
+
     // --- OYUN DÖNGÜSÜ ---
     private val handler = Handler(Looper.getMainLooper())
     private val gameLoop = object : Runnable {
@@ -154,6 +158,23 @@ class GalleryRescueGameView @JvmOverloads constructor(
         textSize = 48f
         isAntiAlias = true
         style = Paint.Style.FILL
+    }
+
+    // Oyun durumu dinleyicisi için arayüz
+    interface GameStateListener {
+        fun onGameStateChanged(lives: Int, score: Long, timerSeconds: Int, revealPercent: Float)
+    }
+
+    private var gameStateListener: GameStateListener? = null
+
+    fun setGameStateListener(listener: GameStateListener) {
+        this.gameStateListener = listener
+    }
+
+    fun restartGame() {
+        setupNewGame()
+        gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
+        invalidate()
     }
 
     init {
@@ -270,6 +291,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         totalRevealedArea = 0f
         revealPercent = 0f
         startTimer()
+        gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
         invalidate()
         handler.removeCallbacks(gameLoop)
         handler.post(gameLoop)
@@ -281,6 +303,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             override fun run() {
                 if (running && !gameOver && !gameWon && timerSeconds > 0) {
                     timerSeconds--
+                    gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
                     timerHandler.postDelayed(this, 1000)
                 } else if (timerSeconds <= 0) {
                     handlePlayerHit()
@@ -492,6 +515,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             if (totalPlayfieldArea > 0) {
                 revealPercent = (totalRevealedArea / totalPlayfieldArea) * 100f
             }
+            gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
             if (revealPercent >= winPercentage) {
                 val fullPath = Path()
                 fullPath.addRect(playfield, Path.Direction.CW)
@@ -545,13 +569,29 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
         canvas.drawRect(playfield, borderPaint)
         for (enemy in enemies) {
-            val paintToUse = when {
-                enemy.isHunter -> hunterPaint
-                enemy.isStalker -> stalkerPaint
-                enemy.isMegaHunter -> megaHunterPaint
-                else -> enemyPaint
+            if (enemy.isMegaHunter) {
+                // Mega boss için görsel çiz (bitmap null ise fallback)
+                val size = enemy.radius * 4f // 2 kat büyük
+                val left = enemy.x - size / 2f
+                val top = enemy.y - size / 2f
+                val right = enemy.x + size / 2f
+                val bottom = enemy.y + size / 2f
+                val destRect = android.graphics.RectF(left, top, right, bottom)
+                monsterDrawable?.let {
+                    it.setBounds(left.toInt(), top.toInt(), right.toInt(), bottom.toInt())
+                    it.draw(canvas)
+                } ?: run {
+                    // Fallback: turuncu yuvarlak çiz
+                    canvas.drawCircle(enemy.x, enemy.y, enemy.radius * 2f, megaHunterPaint)
+                }
+            } else {
+                val paintToUse = when {
+                    enemy.isHunter -> hunterPaint
+                    enemy.isStalker -> stalkerPaint
+                    else -> enemyPaint
+                }
+                canvas.drawCircle(enemy.x, enemy.y, enemy.radius, paintToUse)
             }
-            canvas.drawCircle(enemy.x, enemy.y, enemy.radius, paintToUse)
         }
         canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
         dpadButtons.forEach { (direction, rect) ->
@@ -583,16 +623,16 @@ class GalleryRescueGameView @JvmOverloads constructor(
         val percent = revealPercent // Doğrudan revealPercent'i kullan
 
         // HUD'u onDraw'un sonunda, her şeyin üstünde çiz
-        if (!gameWon && !gameOver) {
-            val hudTextPaint = Paint(hudPaint).apply { textAlign = Paint.Align.LEFT }
-            canvas.drawText("CAN: $lives", 50f, 80f, hudTextPaint)
-            val scoreText = "SKOR: $score"
-            hudTextPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(scoreText, width / 2f, 80f, hudTextPaint)
-            hudTextPaint.textAlign = Paint.Align.RIGHT
-            canvas.drawText("ZAMAN: $timerSeconds", width - 50f, 80f, hudTextPaint)
-            canvas.drawText("%${percent.toInt()}", width - 50f, 140f, hudTextPaint)
-        }
+        // if (!gameWon && !gameOver) {
+        //     val hudTextPaint = Paint(hudPaint).apply { textAlign = Paint.Align.LEFT }
+        //     canvas.drawText("CAN: $lives", 50f, 80f, hudTextPaint)
+        //     val scoreText = "SKOR: $score"
+        //     hudTextPaint.textAlign = Paint.Align.CENTER
+        //     canvas.drawText(scoreText, width / 2f, 80f, hudTextPaint)
+        //     hudTextPaint.textAlign = Paint.Align.RIGHT
+        //     canvas.drawText("ZAMAN: $timerSeconds", width - 50f, 80f, hudTextPaint)
+        //     canvas.drawText("%${percent.toInt()}", width - 50f, 140f, hudTextPaint)
+        // }
 
 
         val bubblePaint = Paint().apply {
@@ -842,6 +882,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         playerY = playfield.top
         playerVx = 0f
         playerVy = 0f
+        gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
         if (lives <= 0) {
             gameOver = true
             running = false
@@ -858,47 +899,19 @@ class GalleryRescueGameView @JvmOverloads constructor(
             val distSq = (p.x - p1.x) * (p.x - p1.x) + (p.y - p1.y) * (p.y - p1.y)
             return distSq to (if (returnPoint) p1 else null)
         }
-        var t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / l2
-        t = t.coerceIn(0f, 1f)
-        val closestX = p1.x + t * (p2.x - p1.x)
-        val closestY = p1.y + t * (p2.y - p1.y)
-        val closestPoint = if (returnPoint) PointF(closestX, closestY) else null
+        val t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / l2
+        val clampedT = t.coerceIn(0f, 1f)
+        val closestX = p1.x + clampedT * (p2.x - p1.x)
+        val closestY = p1.y + clampedT * (p2.y - p1.y)
         val distSq = (p.x - closestX) * (p.x - closestX) + (p.y - closestY) * (p.y - closestY)
-        return distSq to closestPoint
+        val closestPoint = PointF(closestX, closestY)
+        return distSq to (if (returnPoint) closestPoint else null)
     }
 
     private fun moveEnemiesOffScreen() {
-        // Düşmanları ekran dışına taşı
         for (enemy in enemies) {
             enemy.x = -1000f
             enemy.y = -1000f
         }
-    }
-
-    // Oyun durumu dinleyicisi için arayüz
-    interface GameStateListener {
-        fun onGameStateChanged(lives: Int, score: Long, timer: Int, revealPercent: Float)
-    }
-
-    private var gameStateListener: GameStateListener? = null
-
-    fun setGameStateListener(listener: GameStateListener) {
-        this.gameStateListener = listener
-    }
-
-    /**
-     * Oyunu yeniden başlatır. Tüm oyun durumunu sıfırlar ve ekrana yansıtır.
-     */
-    fun restartGame() {
-        // Oyunla ilgili tüm değişkenleri başlangıç değerlerine döndür
-        // Örneğin:
-        // lives = initialLives
-        // score = 0L
-        // timerSeconds = initialTime
-        // revealPercent = 0f
-        // gameOver = false
-        // gameWon = false
-        // ... diğer gerekli sıfırlamalar ...
-        invalidate() // Ekranı yeniden çiz
     }
 }
