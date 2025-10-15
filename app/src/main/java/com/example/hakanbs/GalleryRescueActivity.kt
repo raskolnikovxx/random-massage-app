@@ -7,6 +7,8 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 
 class GalleryRescueActivity : AppCompatActivity(), GalleryRescueGameView.GameStateListener {
     private lateinit var tvScore: TextView
@@ -15,6 +17,7 @@ class GalleryRescueActivity : AppCompatActivity(), GalleryRescueGameView.GameSta
     private lateinit var tvPercent: TextView
     private lateinit var btnRestart: Button
     private lateinit var gameView: GalleryRescueGameView
+    private val activityScope = MainScope()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +32,13 @@ class GalleryRescueActivity : AppCompatActivity(), GalleryRescueGameView.GameSta
         gameView = GalleryRescueGameView(this)
         gameArea.addView(gameView)
         gameView.setGameStateListener(this)
+
+        // RemoteConfig'ten arka plan url'sini çek
+        val controlConfig = ControlConfig(this)
+        activityScope.launch {
+            val config = controlConfig.fetchConfig() ?: controlConfig.getLocalConfig()
+            gameView.setBackgroundUrl(config.galleryRescueBackgroundUrl)
+        }
 
         btnRestart.setOnClickListener {
             gameView.restartGame()

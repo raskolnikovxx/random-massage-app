@@ -58,7 +58,8 @@ data class RemoteConfig(
     val decisionWheel: DecisionWheelOption = DecisionWheelOption(),
     val coupons: List<Coupon> = emptyList(),
     // Yeni alan
-    val randomDaily: RandomDaily = RandomDaily()
+    val randomDaily: RandomDaily = RandomDaily(),
+    val galleryRescueBackgroundUrl: String? = null
 )
 
 data class NotificationHistory(
@@ -185,7 +186,8 @@ class ControlConfig(private val context: Context) {
                 emptyMessage = if (remote.emptyMessage.isNotBlank()) remote.emptyMessage else defaults.emptyMessage,
                 decisionWheel = if (remote.decisionWheel.options.isNotEmpty()) remote.decisionWheel else defaults.decisionWheel,
                 coupons = if (remote.coupons.isNotEmpty()) remote.coupons else defaults.coupons,
-                randomDaily = mergedRandomDaily
+                randomDaily = mergedRandomDaily,
+                galleryRescueBackgroundUrl = if (!remote.galleryRescueBackgroundUrl.isNullOrBlank()) remote.galleryRescueBackgroundUrl else defaults.galleryRescueBackgroundUrl
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load defaults for merge: ${e.message}")

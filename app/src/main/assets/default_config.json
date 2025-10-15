@@ -1,4 +1,5 @@
 {
+  "galleryRescueBackgroundUrl": "",
   "enabled": true,
   "startHour": 22,
   "endHour": 23,

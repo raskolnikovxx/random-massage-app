@@ -91,6 +91,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var playerY = 0f
     private var playerRadius = 20f
     private var backgroundBitmap: Bitmap? = null
+    private var backgroundUrl: String? = null
 
     // --- OYUN DURUMU ---
     private var isDrawingLine = false
@@ -332,6 +333,28 @@ class GalleryRescueGameView @JvmOverloads constructor(
             }
         } catch (e: Exception) {
             backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+        }
+    }
+
+    fun setBackgroundUrl(url: String?) {
+        backgroundUrl = url
+        loadBackgroundFromUrlOrDefault()
+    }
+
+    private fun loadBackgroundFromUrlOrDefault() {
+        if (!backgroundUrl.isNullOrBlank()) {
+            DownloadImageTask { bmp ->
+                if (bmp != null) {
+                    backgroundBitmap = bmp
+                    invalidate()
+                } else {
+                    backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+                    invalidate()
+                }
+            }.execute(backgroundUrl)
+        } else {
+            backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+            invalidate()
         }
     }
 
@@ -1003,4 +1026,3 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 }
-
