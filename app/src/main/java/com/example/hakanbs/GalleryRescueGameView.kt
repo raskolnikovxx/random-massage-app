@@ -91,6 +91,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var totalRevealedArea = 0f
     private var revealPercent = 0f
     private val winPercentage = 80f
+    private var timeOver = false
 
     // --- ÇİZİM İÇİN GEREKLİLER ---
     private var currentLine = mutableListOf<PointF>()
@@ -130,6 +131,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     // Mega boss için sevimli canavar görseli (güvenli yükleme)
     private val monsterDrawable = AppCompatResources.getDrawable(context, R.drawable.monster_cute)
+    private val hunterDrawable = AppCompatResources.getDrawable(context, R.drawable.ic_heart_boss)
 
     // --- OYUN DÖNGÜSÜ ---
     private val handler = Handler(Looper.getMainLooper())
@@ -173,6 +175,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     fun restartGame() {
         setupNewGame()
+        timeOver = false
         gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
         invalidate()
     }
@@ -306,10 +309,18 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
                     timerHandler.postDelayed(this, 1000)
                 } else if (timerSeconds <= 0) {
-                    handlePlayerHit()
+                    handleTimeOver()
                 }
             }
         })
+    }
+
+    private fun handleTimeOver() {
+        timeOver = true
+        gameOver = true
+        running = false
+        gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
+        invalidate()
     }
 
     private fun setupDpadButtons() {
@@ -584,9 +595,22 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     // Fallback: turuncu yuvarlak çiz
                     canvas.drawCircle(enemy.x, enemy.y, enemy.radius * 2f, megaHunterPaint)
                 }
+            } else if (enemy.isHunter) {
+                // Avcı boss: Kalp vektörü çiz
+                hunterDrawable?.let {
+                    val size = enemy.radius * 2f
+                    val left = (enemy.x - size).toInt()
+                    val top = (enemy.y - size).toInt()
+                    val right = (enemy.x + size).toInt()
+                    val bottom = (enemy.y + size).toInt()
+                    it.setBounds(left, top, right, bottom)
+                    it.draw(canvas)
+                } ?: run {
+                    // Fallback: Mor yuvarlak
+                    canvas.drawCircle(enemy.x, enemy.y, enemy.radius, hunterPaint)
+                }
             } else {
                 val paintToUse = when {
-                    enemy.isHunter -> hunterPaint
                     enemy.isStalker -> stalkerPaint
                     else -> enemyPaint
                 }
@@ -661,7 +685,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 textAlign = Paint.Align.CENTER
                 setShadowLayer(12f, 0f, 0f, Color.BLACK)
             }
-            canvas.drawText("GAME OVER", centerX, centerY - 100f, paint)
+            val message = if (timeOver) "SÜREN DOLDU" else "GAME OVER"
+            canvas.drawText(message, centerX, centerY - 100f, paint)
 
             // Tekrar Oyna Butonu
             val buttonPaint = Paint().apply { color = Color.DKGRAY; style = Paint.Style.FILL }
@@ -672,7 +697,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             }
             gameOverButtonRect.set(centerX - 250f, centerY + 50f, centerX + 250f, centerY + 200f)
             canvas.drawRect(gameOverButtonRect, buttonPaint)
-            canvas.drawText("Tekrar Oyna", centerX, centerY + 135f, buttonTextPaint)
+            canvas.drawText("Yeniden Oyna", centerX, centerY + 135f, buttonTextPaint)
 
             return
         }
