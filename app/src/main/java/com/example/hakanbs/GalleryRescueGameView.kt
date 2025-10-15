@@ -351,6 +351,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                // Parent'ın gesture'ı çalmasını engelle
+                parent?.requestDisallowInterceptTouchEvent(true)
                 var buttonPressed = false
                 dpadButtons.forEach { (direction, rect) ->
                     if (rect.contains(touchX, touchY)) {
@@ -369,6 +371,22 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 if (isDrawingLine) {
                     val clampedX = touchX.coerceIn(playfield.left, playfield.right)
                     val clampedY = touchY.coerceIn(playfield.top, playfield.bottom)
+
+                    // Hile Engelleme: İki nokta arası mesafe kontrolü
+                    if (currentLine.isNotEmpty()) {
+                        val lastPoint = currentLine.last()
+                        val dx = clampedX - lastPoint.x
+                        val dy = clampedY - lastPoint.y
+                        val distanceSquared = dx * dx + dy * dy
+                        val maxDistancePerFrame = playerSpeed * 5 // Oyuncu hızının 5 katı
+                        if (distanceSquared > maxDistancePerFrame * maxDistancePerFrame) {
+                            isDrawingLine = false
+                            currentLine.clear()
+                            invalidate()
+                            return true
+                        }
+                    }
+
                     currentLine.add(PointF(clampedX, clampedY))
                     if (currentLine.size > 2 && isOnEdge(clampedX, clampedY)) {
                         captureAndRevealArea()
