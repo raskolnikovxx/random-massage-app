@@ -10,13 +10,17 @@ import android.graphics.Path // Path nesnesini kullanacağız
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Region
+import android.os.AsyncTask
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import androidx.core.graphics.withClip
 import androidx.appcompat.content.res.AppCompatResources
+import org.json.JSONObject
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -64,6 +68,15 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return getPolygonArea(points)
     }
 
+    // YENİ: Dokunmanın oyuncu üzerinde olup olmadığını kontrol eden fonksiyon
+    private fun isTouchOnPlayer(x: Float, y: Float): Boolean {
+        val dx = x - playerX
+        val dy = y - playerY
+        // Dokunma alanını karakterin görsel yarıçapından biraz daha büyük yapalım
+        val touchRadius = playerRadius * 2.5f
+        return dx * dx + dy * dy < touchRadius * touchRadius
+    }
+
     // --- MANUEL KONTROL İÇİN DEĞİŞKENLER ---
     private val dpadButtons = mutableMapOf<String, RectF>()
     private val dpadPaint = Paint().apply { color = Color.argb(100, 255, 255, 255) }
@@ -97,6 +110,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var currentLine = mutableListOf<PointF>()
     private val revealedPaths = mutableListOf<Path>()
     private val revealedRegion = Region()
+    private val drawingPath = Path()
 
     // --- PAINT NESNELERİ ---
     private val playerPaint = Paint().apply { color = Color.RED }
@@ -194,7 +208,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun setupNewGame() {
-        val padding = 40f
+        val padding = 80f
         playfield.set(padding, padding * 2, width - padding, height - padding - 300f)
         setupDpadButtons()
         playerX = playfield.left
@@ -283,7 +297,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             directionChangeTimer = 90
         )
         enemies.add(megaHunterBoss2)
-        backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+        loadBackgroundFromJsonOrDefault()
         lives = 3
         isDrawingLine = false
         running = true
@@ -298,6 +312,45 @@ class GalleryRescueGameView @JvmOverloads constructor(
         invalidate()
         handler.removeCallbacks(gameLoop)
         handler.post(gameLoop)
+    }
+
+    private fun loadBackgroundFromJsonOrDefault() {
+        try {
+            val inputStream: InputStream = context.assets.open("default_config.json")
+            val jsonString = inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(jsonString)
+            val imageUrl = json.optString("galleryRescueBackgroundUrl", null)
+            if (!imageUrl.isNullOrBlank()) {
+                DownloadImageTask { bmp ->
+                    if (bmp != null) {
+                        backgroundBitmap = bmp
+                        invalidate()
+                    }
+                }.execute(imageUrl)
+            } else {
+                backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+            }
+        } catch (e: Exception) {
+            backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+        }
+    }
+
+    private class DownloadImageTask(val onResult: (Bitmap?) -> Unit) : AsyncTask<String, Void, Bitmap?>() {
+        override fun doInBackground(vararg params: String?): Bitmap? {
+            return try {
+                val url = URL(params[0])
+                val connection: HttpURLConnection = url.openConnection() as HttpURLConnection
+                connection.doInput = true
+                connection.connect()
+                val input: InputStream = connection.inputStream
+                BitmapFactory.decodeStream(input)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        override fun onPostExecute(result: Bitmap?) {
+            onResult(result)
+        }
     }
 
     private fun startTimer() {
@@ -337,21 +390,20 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Tekrar Oyna butonu için kontrol
         if ((gameOver || gameWon) && event.action == MotionEvent.ACTION_DOWN) {
             if (gameOverButtonRect.contains(event.x, event.y)) {
-                setupNewGame()
-                invalidate()
+                restartGame()
                 return true
             }
         }
+        if (gameOver || gameWon) return false
+
 
         val touchX = event.x
         val touchY = event.y
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                // Parent'ın gesture'ı çalmasını engelle
                 parent?.requestDisallowInterceptTouchEvent(true)
                 var buttonPressed = false
                 dpadButtons.forEach { (direction, rect) ->
@@ -361,10 +413,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     }
                 }
 
-                if (!buttonPressed && !isDrawingLine) {
+                // DEĞİŞTİRİLDİ: Sadece oyuncunun üzerine dokunulduğunda çizimi başlat.
+                if (!buttonPressed && !isDrawingLine && isTouchOnPlayer(touchX, touchY)) {
                     isDrawingLine = true
                     currentLine.clear()
                     currentLine.add(PointF(playerX, playerY))
+                    drawingPath.reset()
+                    drawingPath.moveTo(playerX, playerY)
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -372,72 +427,88 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     val clampedX = touchX.coerceIn(playfield.left, playfield.right)
                     val clampedY = touchY.coerceIn(playfield.top, playfield.bottom)
 
-                    // Hile Engelleme: İki nokta arası mesafe kontrolü
                     if (currentLine.isNotEmpty()) {
                         val lastPoint = currentLine.last()
                         val dx = clampedX - lastPoint.x
                         val dy = clampedY - lastPoint.y
                         val distanceSquared = dx * dx + dy * dy
-                        val maxDistancePerFrame = playerSpeed * 5 // Oyuncu hızının 5 katı
+                        val maxDistancePerFrame = playerSpeed * 30
                         if (distanceSquared > maxDistancePerFrame * maxDistancePerFrame) {
                             isDrawingLine = false
                             currentLine.clear()
+                            drawingPath.reset()
+                            parent?.requestDisallowInterceptTouchEvent(false)
                             invalidate()
                             return true
                         }
                     }
 
                     currentLine.add(PointF(clampedX, clampedY))
-                    if (currentLine.size > 2 && isOnEdge(clampedX, clampedY)) {
-                        captureAndRevealArea()
-                        val finalPosition = snapToWall(clampedX, clampedY)
-                        playerX = finalPosition.x
-                        playerY = finalPosition.y
-                        playerVx = 0f
-                        playerVy = 0f
+                    drawingPath.lineTo(clampedX, clampedY)
 
-                        isDrawingLine = false
-                        currentLine.clear()
+                    val currentEdge = getEdgeFromPoint(PointF(clampedX, clampedY))
+                    if (currentLine.size > 2 && currentEdge != null) {
+                        finishDrawing(clampedX, clampedY)
                     }
                 }
             }
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 playerVx = 0f
                 playerVy = 0f
 
                 if (isDrawingLine) {
                     val clampedX = touchX.coerceIn(playfield.left, playfield.right)
                     val clampedY = touchY.coerceIn(playfield.top, playfield.bottom)
-                    currentLine.add(PointF(clampedX, clampedY))
-
-                    if (currentLine.size > 2 && isOnEdge(clampedX, clampedY)) {
-                        captureAndRevealArea()
-                        val finalPosition = snapToWall(clampedX, clampedY)
-                        playerX = finalPosition.x
-                        playerY = finalPosition.y
+                    val currentEdge = getEdgeFromPoint(PointF(clampedX, clampedY))
+                    if (currentLine.size > 2 && currentEdge != null) {
+                        finishDrawing(clampedX, clampedY)
+                    } else {
+                        isDrawingLine = false
+                        currentLine.clear()
+                        drawingPath.reset()
                     }
                 }
 
-                isDrawingLine = false
-                currentLine.clear()
+                parent?.requestDisallowInterceptTouchEvent(false)
             }
         }
         invalidate()
         return true
     }
 
+    private fun finishDrawing(finalX: Float, finalY: Float) {
+        if (!isDrawingLine) return
+
+        captureAndRevealArea()
+        val finalPosition = snapToWall(finalX, finalY)
+        playerX = finalPosition.x
+        playerY = finalPosition.y
+        playerVx = 0f
+        playerVy = 0f
+
+        isDrawingLine = false
+        currentLine.clear()
+        drawingPath.reset()
+        parent?.requestDisallowInterceptTouchEvent(false)
+    }
+
     private fun movePlayer(direction: String) {
-        val onLeft = playerX == playfield.left
-        val onRight = playerX == playfield.right
-        val onTop = playerY == playfield.top
-        val onBottom = playerY == playfield.bottom
-        val onCorner = (onLeft || onRight) && (onTop || onBottom)
+        val onHorizontalWall = (playerY == playfield.top || playerY == playfield.bottom)
+        val onVerticalWall = (playerX == playfield.left || playerX == playfield.right)
 
         when (direction) {
-            "LEFT" -> if (onTop || onBottom || onCorner) { playerVy = 0f; playerVx = -playerSpeed }
-            "RIGHT" -> if (onTop || onBottom || onCorner) { playerVy = 0f; playerVx = playerSpeed }
-            "UP" -> if (onLeft || onRight || onCorner) { playerVx = 0f; playerVy = -playerSpeed }
-            "DOWN" -> if (onLeft || onRight || onCorner) { playerVx = 0f; playerVy = playerSpeed }
+            "LEFT", "RIGHT" -> {
+                if (onHorizontalWall) {
+                    playerVy = 0f
+                    playerVx = if (direction == "LEFT") -playerSpeed else playerSpeed
+                }
+            }
+            "UP", "DOWN" -> {
+                if (onVerticalWall) {
+                    playerVx = 0f
+                    playerVy = if (direction == "UP") -playerSpeed else playerSpeed
+                }
+            }
         }
     }
 
@@ -591,30 +662,27 @@ class GalleryRescueGameView @JvmOverloads constructor(
             paint.isAntiAlias = true
             paint.alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
             for (path in revealedPaths) {
-                canvas.withClip(path) {
-                    drawBitmap(bmp, null, playfield, paint)
-                }
+                canvas.save()
+                canvas.clipPath(path)
+                canvas.drawBitmap(bmp, null, playfield, paint)
+                canvas.restore()
             }
         }
         canvas.drawRect(playfield, borderPaint)
         for (enemy in enemies) {
             if (enemy.isMegaHunter) {
-                // Mega boss için görsel çiz (bitmap null ise fallback)
-                val size = enemy.radius * 4f // 2 kat büyük
+                val size = enemy.radius * 4f
                 val left = enemy.x - size / 2f
                 val top = enemy.y - size / 2f
                 val right = enemy.x + size / 2f
                 val bottom = enemy.y + size / 2f
-                val destRect = android.graphics.RectF(left, top, right, bottom)
                 monsterDrawable?.let {
                     it.setBounds(left.toInt(), top.toInt(), right.toInt(), bottom.toInt())
                     it.draw(canvas)
                 } ?: run {
-                    // Fallback: turuncu yuvarlak çiz
                     canvas.drawCircle(enemy.x, enemy.y, enemy.radius * 2f, megaHunterPaint)
                 }
             } else if (enemy.isHunter) {
-                // Avcı boss: Kalp vektörü çiz
                 hunterDrawable?.let {
                     val size = enemy.radius * 2f
                     val left = (enemy.x - size).toInt()
@@ -624,7 +692,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     it.setBounds(left, top, right, bottom)
                     it.draw(canvas)
                 } ?: run {
-                    // Fallback: Mor yuvarlak
                     canvas.drawCircle(enemy.x, enemy.y, enemy.radius, hunterPaint)
                 }
             } else {
@@ -650,32 +717,10 @@ class GalleryRescueGameView @JvmOverloads constructor(
             canvas.drawPath(arrowPath, Paint().apply { color = Color.WHITE; style = Paint.Style.FILL; isAntiAlias = true; alpha = 180 })
             canvas.drawPath(arrowPath, Paint().apply { color = Color.DKGRAY; style = Paint.Style.STROKE; strokeWidth = 6f; isAntiAlias = true })
         }
-        if (isDrawingLine && currentLine.size > 1) {
-            for (i in 0 until currentLine.size - 1) {
-                val start = currentLine[i]
-                val end = currentLine[i + 1]
-                canvas.drawLine(start.x, start.y, end.x, end.y, linePaint)
-            }
+
+        if (isDrawingLine) {
+            canvas.drawPath(drawingPath, linePaint)
         }
-
-        // Bu kısım artık sınıfın başka bir yerinde tanımlı olduğu için silindi
-        // val revealedArea = getRevealedArea()
-        // val totalArea = playfield.width() * playfield.height()
-        // val percent = if (totalArea > 0f) (revealedArea / totalArea * 100f).coerceIn(0f, 100f) else 0f
-        val percent = revealPercent // Doğrudan revealPercent'i kullan
-
-        // HUD'u onDraw'un sonunda, her şeyin üstünde çiz
-        // if (!gameWon && !gameOver) {
-        //     val hudTextPaint = Paint(hudPaint).apply { textAlign = Paint.Align.LEFT }
-        //     canvas.drawText("CAN: $lives", 50f, 80f, hudTextPaint)
-        //     val scoreText = "SKOR: $score"
-        //     hudTextPaint.textAlign = Paint.Align.CENTER
-        //     canvas.drawText(scoreText, width / 2f, 80f, hudTextPaint)
-        //     hudTextPaint.textAlign = Paint.Align.RIGHT
-        //     canvas.drawText("ZAMAN: $timerSeconds", width - 50f, 80f, hudTextPaint)
-        //     canvas.drawText("%${percent.toInt()}", width - 50f, 140f, hudTextPaint)
-        // }
-
 
         val bubblePaint = Paint().apply {
             color = Color.YELLOW
@@ -706,7 +751,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
             val message = if (timeOver) "SÜREN DOLDU" else "GAME OVER"
             canvas.drawText(message, centerX, centerY - 100f, paint)
 
-            // Tekrar Oyna Butonu
             val buttonPaint = Paint().apply { color = Color.DKGRAY; style = Paint.Style.FILL }
             val buttonTextPaint = Paint().apply {
                 color = Color.WHITE
@@ -921,6 +965,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         lives--
         isDrawingLine = false
         currentLine.clear()
+        drawingPath.reset()
         playerX = playfield.left
         playerY = playfield.top
         playerVx = 0f
@@ -958,3 +1003,4 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 }
+
