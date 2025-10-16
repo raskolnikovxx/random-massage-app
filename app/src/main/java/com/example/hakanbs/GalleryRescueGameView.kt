@@ -10,17 +10,20 @@ import android.graphics.Path // Path nesnesini kullanacağız
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Region
-import android.os.AsyncTask
+import android.graphics.drawable.Animatable
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.graphics.drawable.toBitmap
+import coil.imageLoader
+import coil.request.ImageRequest
 import org.json.JSONObject
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -68,11 +71,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return getPolygonArea(points)
     }
 
-    // YENİ: Dokunmanın oyuncu üzerinde olup olmadığını kontrol eden fonksiyon
     private fun isTouchOnPlayer(x: Float, y: Float): Boolean {
         val dx = x - playerX
         val dy = y - playerY
-        // Dokunma alanını karakterin görsel yarıçapından biraz daha büyük yapalım
         val touchRadius = playerRadius * 2.5f
         return dx * dx + dy * dy < touchRadius * touchRadius
     }
@@ -90,7 +91,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var playerX = 0f
     private var playerY = 0f
     private var playerRadius = 20f
-    private var backgroundBitmap: Bitmap? = null
+    // <<< DEĞİŞİKLİK: 'backgroundBitmap' artık 'backgroundDrawable' oldu >>>
+    private var backgroundDrawable: Drawable? = null
     private var backgroundUrl: String? = null
 
     // --- OYUN DURUMU ---
@@ -144,7 +146,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var megaHunterBoss: Enemy? = null
     private var bossCount = 1
 
-    // Mega boss için sevimli canavar görseli (güvenli yükleme)
     private val monsterDrawable = AppCompatResources.getDrawable(context, R.drawable.monster_cute)
     private val hunterDrawable = AppCompatResources.getDrawable(context, R.drawable.ic_heart_boss)
 
@@ -166,10 +167,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private data class ScoreBubble(var x: Float, var y: Float, val text: String, var alpha: Float = 1f, var dy: Float = -2f)
     private val scoreBubbles = mutableListOf<ScoreBubble>()
 
-    // GAME OVER butonu için alan
     private val gameOverButtonRect = RectF()
 
-    // HUD için kullanılacak Paint nesnesi
     private val hudPaint = Paint().apply {
         color = Color.WHITE
         textSize = 48f
@@ -177,7 +176,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    // Oyun durumu dinleyicisi için arayüz
     interface GameStateListener {
         fun onGameStateChanged(lives: Int, score: Long, timerSeconds: Int, revealPercent: Float)
     }
@@ -209,6 +207,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun setupNewGame() {
+        (backgroundDrawable as? Animatable)?.stop()
+
         val padding = 80f
         playfield.set(padding, padding * 2, width - padding, height - padding - 300f)
         setupDpadButtons()
@@ -218,7 +218,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         currentLine.clear()
         enemies.clear()
         bossCount = 1
-        // Düşmanları güvenli mesafede başlat
         repeat(3) {
             var ex: Float
             var ey: Float
@@ -236,7 +235,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 )
             )
         }
-        // 2 tane Avcı (Hunter) boss
         var hx: Float
         var hy: Float
         do {
@@ -257,7 +255,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
             -2f, 2f, 25f, isHunter = true
         )
         enemies.add(hunterBoss2)
-        // 1 tane Stalker boss -> sadece 1 tane olacak
         var sx: Float
         var sy: Float
         do {
@@ -271,7 +268,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
             isStalker = true
         )
         enemies.add(stalkerBoss!!)
-        // 2 tane Mega Hunter boss
         var mx: Float
         var my: Float
         do {
@@ -298,7 +294,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
             directionChangeTimer = 90
         )
         enemies.add(megaHunterBoss2)
-        loadBackgroundFromJsonOrDefault()
+
+        if (backgroundUrl.isNullOrBlank()) {
+            loadBackgroundFromJsonOrDefault()
+        } else {
+            loadBackgroundFromUrlOrDefault()
+        }
+
         lives = 3
         isDrawingLine = false
         running = true
@@ -316,64 +318,63 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun loadBackgroundFromJsonOrDefault() {
-        try {
+        val urlFromJson = try {
             val inputStream: InputStream = context.assets.open("default_config.json")
             val jsonString = inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(jsonString)
-            val imageUrl = json.optString("galleryRescueBackgroundUrl", null)
-            if (!imageUrl.isNullOrBlank()) {
-                DownloadImageTask { bmp ->
-                    if (bmp != null) {
-                        backgroundBitmap = bmp
-                        invalidate()
-                    }
-                }.execute(imageUrl)
-            } else {
-                backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
-            }
+            json.optString("galleryRescueBackgroundUrl", null)
         } catch (e: Exception) {
-            backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+            null
         }
-    }
 
-    fun setBackgroundUrl(url: String?) {
-        backgroundUrl = url
-        loadBackgroundFromUrlOrDefault()
-    }
-
-    private fun loadBackgroundFromUrlOrDefault() {
-        if (!backgroundUrl.isNullOrBlank()) {
-            DownloadImageTask { bmp ->
-                if (bmp != null) {
-                    backgroundBitmap = bmp
-                    invalidate()
-                } else {
-                    backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
-                    invalidate()
-                }
-            }.execute(backgroundUrl)
+        if (!urlFromJson.isNullOrBlank()) {
+            setBackgroundUrl(urlFromJson)
         } else {
-            backgroundBitmap = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+            val bmp = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+            this.backgroundDrawable = BitmapDrawable(resources, bmp)
             invalidate()
         }
     }
 
-    private class DownloadImageTask(val onResult: (Bitmap?) -> Unit) : AsyncTask<String, Void, Bitmap?>() {
-        override fun doInBackground(vararg params: String?): Bitmap? {
-            return try {
-                val url = URL(params[0])
-                val connection: HttpURLConnection = url.openConnection() as HttpURLConnection
-                connection.doInput = true
-                connection.connect()
-                val input: InputStream = connection.inputStream
-                BitmapFactory.decodeStream(input)
-            } catch (e: Exception) {
-                null
-            }
+    fun setBackgroundUrl(url: String?) {
+        this.backgroundUrl = url
+        loadBackgroundFromUrlOrDefault()
+    }
+
+    private fun loadBackgroundFromUrlOrDefault() {
+        val dataToLoad = if (!backgroundUrl.isNullOrBlank()) {
+            backgroundUrl
+        } else {
+            val bmp = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+            this.backgroundDrawable = BitmapDrawable(resources, bmp)
+            invalidate()
+            return
         }
-        override fun onPostExecute(result: Bitmap?) {
-            onResult(result)
-        }
+
+        val imageLoader = context.imageLoader
+        val request = ImageRequest.Builder(context)
+            .data(dataToLoad)
+            .target(
+                onSuccess = { result ->
+                    backgroundDrawable?.callback = null
+                    backgroundDrawable = result
+                    backgroundDrawable?.callback = this@GalleryRescueGameView
+                    (backgroundDrawable as? Animatable)?.stop()
+                    invalidate()
+                },
+                onError = {
+                    backgroundDrawable?.callback = null
+                    val bmp = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
+                    backgroundDrawable = BitmapDrawable(resources, bmp)
+                    invalidate()
+                }
+            )
+            .build()
+        imageLoader.enqueue(request)
+    }
+
+    override fun verifyDrawable(who: Drawable): Boolean {
+        return super.verifyDrawable(who) || who === backgroundDrawable
     }
 
     private fun startTimer() {
@@ -436,7 +437,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     }
                 }
 
-                // DEĞİŞTİRİLDİ: Sadece oyuncunun üzerine dokunulduğunda çizimi başlat.
                 if (!buttonPressed && !isDrawingLine && isTouchOnPlayer(touchX, touchY)) {
                     isDrawingLine = true
                     currentLine.clear()
@@ -650,6 +650,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 score += timerSeconds * 100L
                 timerHandler.removeCallbacksAndMessages(null)
                 moveEnemiesOffScreen()
+                (backgroundDrawable as? Animatable)?.start()
             }
         }
     }
@@ -680,17 +681,37 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        backgroundBitmap?.let { bmp ->
+        // <<< DÜZELTME: `backgroundDrawable`'ı `Bitmap`'e çevirerek orijinal çizim mantığını kullan >>>
+        // Bu, `clipPath` ve ölçeklemenin %100 doğru çalışmasını garanti eder.
+        val bmp = if (backgroundDrawable is BitmapDrawable) {
+            (backgroundDrawable as BitmapDrawable).bitmap
+        } else {
+            // Animatable (GIF) ise, mevcut karesini Bitmap'e çiz
+            backgroundDrawable?.let {
+                if (it.intrinsicWidth <= 0 || it.intrinsicHeight <= 0) {
+                    null
+                } else {
+                    val bitmap = Bitmap.createBitmap(it.intrinsicWidth, it.intrinsicHeight, Bitmap.Config.ARGB_8888)
+                    val tempCanvas = Canvas(bitmap)
+                    it.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
+                    it.draw(tempCanvas)
+                    bitmap
+                }
+            }
+        }
+
+        bmp?.let {
             val paint = Paint()
             paint.isAntiAlias = true
             paint.alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
             for (path in revealedPaths) {
                 canvas.save()
                 canvas.clipPath(path)
-                canvas.drawBitmap(bmp, null, playfield, paint)
+                canvas.drawBitmap(it, null, playfield, paint)
                 canvas.restore()
             }
         }
+
         canvas.drawRect(playfield, borderPaint)
         for (enemy in enemies) {
             if (enemy.isMegaHunter) {
@@ -802,9 +823,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     private fun updateEnemies() {
         if (revealPercent >= 50f && bossCount < 3) {
-            // ...
+            // Orijinal kodda boştu
         } else if (revealPercent >= 20f && bossCount < 2) {
-            // ...
+            // Orijinal kodda boştu
         }
         for (enemy in enemies) {
             when {
@@ -852,7 +873,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 stalker.vy = playerSpeed * 0.8f * Math.signum(playerY - stalker.y)
             } else {
                 stalker.vy = 0f
-                stalker.vx = playerSpeed * 0.8f * Math.signum(playerX - stalker.x)
+                stalker.vx = playerSpeed * 0.8f * Math.signum(playerX - stalker.y)
             }
         }
     }
@@ -939,7 +960,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         if (megaHunter.y - megaHunter.radius > playfield.bottom) megaHunter.y = playfield.top - megaHunter.radius
     }
 
-
+    // <<< DÜZELTME: Silinen speedMultiplier satırı geri eklendi >>>
     private fun updateMinion(enemy: Enemy) {
         val speedMultiplier = 1f + 0.2f * (getRevealedArea() / (playfield.width() * playfield.height()))
         enemy.x += enemy.vx * speedMultiplier
@@ -1026,3 +1047,4 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 }
+
