@@ -23,6 +23,9 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import org.json.JSONObject
 import java.io.InputStream
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -127,21 +130,31 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     // --- DÜŞMANLAR ---
+    // <<< YENİ: ArrowBoss için eklenen property'ler >>>
     private data class Enemy(
         var x: Float, var y: Float, var vx: Float, var vy: Float, val radius: Float,
         val isHunter: Boolean = false,
         val isStalker: Boolean = false,
         val isMegaHunter: Boolean = false,
-        var directionChangeTimer: Int = 0
+        val isArrowBoss: Boolean = false, // ArrowBoss'u ayırt etmek için
+        var directionChangeTimer: Int = 0,
+        var arrowCooldown: Int = 120 // Ok atma bekleme süresi
     )
+    // <<< YENİ: Ok mermisi için veri sınıfı >>>
+    private data class Arrow(var x: Float, var y: Float, var vx: Float, var vy: Float, val radius: Float = 10f)
+
     private val enemies = mutableListOf<Enemy>()
+    private val arrows = mutableListOf<Arrow>() // <<< YENİ: Oyundaki tüm okları tutan liste
     private val enemyPaint = Paint().apply { color = Color.GREEN }
     private val hunterPaint = Paint().apply { color = Color.MAGENTA }
     private val stalkerPaint = Paint().apply { color = Color.CYAN }
     private val megaHunterPaint = Paint().apply { color = Color.rgb(255, 100, 0) }
+    private val arrowBossPaint = Paint().apply { color = Color.WHITE } // <<< YENİ
+    private val arrowPaint = Paint().apply { color = Color.LTGRAY } // <<< YENİ
     private var hunterBoss: Enemy? = null
     private var stalkerBoss: Enemy? = null
     private var megaHunterBoss: Enemy? = null
+    private var arrowBoss: Enemy? = null // <<< YENİ
     private var bossCount = 1
 
     private val monsterDrawable = AppCompatResources.getDrawable(context, R.drawable.monster_cute)
@@ -154,6 +167,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
             if (running && !gameOver && !gameWon) {
                 updatePlayer()
                 updateEnemies()
+                // <<< YENİ: Okları güncelle >>>
+                updateArrows()
                 checkCollisions()
                 invalidate()
                 handler.postDelayed(this, 16)
@@ -215,6 +230,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         revealedPaths.clear()
         currentLine.clear()
         enemies.clear()
+        arrows.clear() // <<< YENİ: Okları temizle
         bossCount = 1
         repeat(3) {
             var ex: Float
@@ -241,7 +257,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         } while (!isSafeSpawn(hx, hy, 180f))
         hunterBoss = Enemy(
             hx, hy,
-            2f, 2f, 25f, isHunter = true
+            2f, 2f, 30f, isHunter = true
         )
         enemies.add(hunterBoss!!)
         do {
@@ -250,7 +266,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         } while (!isSafeSpawn(hx, hy, 180f))
         val hunterBoss2 = Enemy(
             hx, hy,
-            -2f, 2f, 25f, isHunter = true
+            -2f, 2f, 30f, isHunter = true
         )
         enemies.add(hunterBoss2)
         var sx: Float
@@ -275,7 +291,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         megaHunterBoss = Enemy(
             mx, my,
             1f, -1f,
-            75f,
+            85f,
             isMegaHunter = true,
             directionChangeTimer = 60
         )
@@ -287,11 +303,29 @@ class GalleryRescueGameView @JvmOverloads constructor(
         val megaHunterBoss2 = Enemy(
             mx, my,
             -1f, 1f,
-            75f,
+            85f,
             isMegaHunter = true,
             directionChangeTimer = 90
         )
         enemies.add(megaHunterBoss2)
+
+        // <<< YENİ: ArrowBoss'u oluştur ve oyuna ekle >>>
+        var ax: Float
+        var ay: Float
+        do {
+            ax = playfield.centerX()
+            ay = playfield.top + 150f
+        } while (!isSafeSpawn(ax, ay, 250f))
+        arrowBoss = Enemy(
+            ax, ay,
+            1f, 1f, // Yavaş başlangıç hızı
+            40f, // Boyutu
+            isArrowBoss = true,
+            directionChangeTimer = 100,
+            arrowCooldown = 150 // İlk ok atışı için geri sayım
+        )
+        enemies.add(arrowBoss!!)
+
 
         if (backgroundUrl.isNullOrBlank()) {
             loadBackgroundFromJsonOrDefault()
@@ -313,33 +347,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         invalidate()
         handler.removeCallbacks(gameLoop)
         handler.post(gameLoop)
-    }
-
-    private var cachedBackgroundBitmap: Bitmap? = null
-    private var cachedBackgroundDrawable: Drawable? = null
-
-    private fun updateBackgroundCache() {
-        val drawable = backgroundDrawable
-        if (drawable == null) {
-            cachedBackgroundBitmap = null
-            cachedBackgroundDrawable = null
-            return
-        }
-        if (drawable == cachedBackgroundDrawable && cachedBackgroundBitmap != null) return
-        if (drawable is BitmapDrawable) {
-            cachedBackgroundBitmap = drawable.bitmap
-            cachedBackgroundDrawable = drawable
-        } else if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
-            val bitmap = Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
-            val tempCanvas = Canvas(bitmap)
-            drawable.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
-            drawable.draw(tempCanvas)
-            cachedBackgroundBitmap = bitmap
-            cachedBackgroundDrawable = drawable
-        } else {
-            cachedBackgroundBitmap = null
-            cachedBackgroundDrawable = drawable
-        }
     }
 
     private fun loadBackgroundFromJsonOrDefault() {
@@ -364,8 +371,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
     fun setBackgroundUrl(url: String?) {
         this.backgroundUrl = url
         loadBackgroundFromUrlOrDefault()
-        cachedBackgroundBitmap = null
-        cachedBackgroundDrawable = null
     }
 
     private fun loadBackgroundFromUrlOrDefault() {
@@ -652,7 +657,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             scoreBubbles.add(ScoreBubble(playerX, playerY - 40f, "+$areaScore"))
             val enemiesToRemove = mutableListOf<Enemy>()
             for (enemy in enemies) {
-                if (enemy.isHunter || enemy.isStalker || enemy.isMegaHunter) continue
+                if (enemy.isHunter || enemy.isStalker || enemy.isMegaHunter || enemy.isArrowBoss) continue // <<< YENİ: ArrowBoss yakalanamaz
                 val pathBounds = RectF()
                 capturedPath.computeBounds(pathBounds, true)
                 if (pathBounds.contains(enemy.x, enemy.y)) {
@@ -708,31 +713,45 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        updateBackgroundCache()
-        if (gameWon && backgroundDrawable is Animatable) {
-            // Animasyonlu drawable'ı doğrudan çiz ve animasyonu başlat
-            val animDrawable = backgroundDrawable!!
-            animDrawable.setBounds(playfield.left.toInt(), playfield.top.toInt(), playfield.right.toInt(), playfield.bottom.toInt())
-            animDrawable.draw(canvas)
-            (animDrawable as Animatable).start()
-        } else {
-            val bmp = cachedBackgroundBitmap
-            if (bmp != null) {
-                val paint = Paint().apply {
-                    isAntiAlias = true
-                    alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
+        val bmp: Bitmap? = backgroundDrawable?.let { drawable ->
+            if (drawable is BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
+                    null
+                } else {
+                    val bitmap = Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
+                    val tempCanvas = Canvas(bitmap)
+                    drawable.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
+                    drawable.draw(tempCanvas)
+                    bitmap
                 }
-                for (path in revealedPaths) {
-                    canvas.save()
-                    canvas.clipPath(path)
-                    canvas.drawBitmap(bmp, null, playfield, paint)
-                    canvas.restore()
-                }
+            }
+        }
+
+        bmp?.let {
+            val paint = Paint()
+            paint.isAntiAlias = true
+            paint.alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
+            for (path in revealedPaths) {
+                canvas.save()
+                canvas.clipPath(path)
+                canvas.drawBitmap(it, null, playfield, paint)
+                canvas.restore()
             }
         }
 
         canvas.drawRect(playfield, borderPaint)
         for (enemy in enemies) {
+            // <<< YENİ: ArrowBoss için çizim mantığı >>>
+            val paintToUse = when {
+                enemy.isMegaHunter -> megaHunterPaint
+                enemy.isHunter -> hunterPaint
+                enemy.isStalker -> stalkerPaint
+                enemy.isArrowBoss -> arrowBossPaint
+                else -> enemyPaint
+            }
+
             if (enemy.isMegaHunter) {
                 val size = enemy.radius * 4f
                 val left = enemy.x - size / 2f
@@ -743,7 +762,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     it.setBounds(left.toInt(), top.toInt(), right.toInt(), bottom.toInt())
                     it.draw(canvas)
                 } ?: run {
-                    canvas.drawCircle(enemy.x, enemy.y, enemy.radius * 2f, megaHunterPaint)
+                    canvas.drawCircle(enemy.x, enemy.y, enemy.radius * 2f, paintToUse)
                 }
             } else if (enemy.isHunter) {
                 hunterDrawable?.let {
@@ -755,16 +774,17 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     it.setBounds(left, top, right, bottom)
                     it.draw(canvas)
                 } ?: run {
-                    canvas.drawCircle(enemy.x, enemy.y, enemy.radius, hunterPaint)
+                    canvas.drawCircle(enemy.x, enemy.y, enemy.radius, paintToUse)
                 }
             } else {
-                val paintToUse = when {
-                    enemy.isStalker -> stalkerPaint
-                    else -> enemyPaint
-                }
                 canvas.drawCircle(enemy.x, enemy.y, enemy.radius, paintToUse)
             }
         }
+        // <<< YENİ: Okları çiz >>>
+        for (arrow in arrows) {
+            canvas.drawCircle(arrow.x, arrow.y, arrow.radius, arrowPaint)
+        }
+
         canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
         dpadButtons.forEach { (direction, rect) ->
             val cx = rect.centerX()
@@ -842,15 +862,16 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     private fun updateEnemies() {
         if (revealPercent >= 50f && bossCount < 3) {
-            // ...
+            // Orijinal kodda boştu
         } else if (revealPercent >= 20f && bossCount < 2) {
-            // ...
+            // Orijinal kodda boştu
         }
         for (enemy in enemies) {
             when {
                 enemy.isHunter -> updateHunter(enemy)
                 enemy.isStalker -> updateStalker(enemy)
                 enemy.isMegaHunter -> updateMegaHunter(enemy)
+                enemy.isArrowBoss -> updateArrowBoss(enemy) // <<< YENİ
                 else -> updateMinion(enemy)
             }
         }
@@ -898,8 +919,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun updateHunter(hunter: Enemy) {
-        val hunterAggroSpeed = 7f * 1.1f // %10 arttırıldı
-        val hunterIdleSpeed = 2f * 1.1f // %10 arttırıldı
+        val hunterAggroSpeed = 8.5f
+        val hunterIdleSpeed = 2.5f
+
         if (isDrawingLine && currentLine.isNotEmpty()) {
             var closestPoint: PointF? = null
             var minDistanceSq = Float.MAX_VALUE
@@ -940,8 +962,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun updateMegaHunter(megaHunter: Enemy) {
-        val megaHunterAggroSpeed = 5f * 2.1f // %10 arttırıldı
-        val megaHunterIdleSpeed = 3f * 2.1f // %10 arttırıldı
+        val megaHunterAggroSpeed = 6f
+        val megaHunterIdleSpeed = 3.5f
+
         if (isDrawingLine && currentLine.isNotEmpty()) {
             var closestPoint: PointF? = null
             var minDistanceSq = Float.MAX_VALUE
@@ -968,8 +991,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             if (megaHunter.directionChangeTimer <= 0) {
                 megaHunter.vx = (Random.nextFloat() - 0.5f) * 2f * megaHunterIdleSpeed
                 megaHunter.vy = (Random.nextFloat() - 0.5f) * 2f * megaHunterIdleSpeed
-                // Daha sık ve rastgele yön değiştirmesi için aralığı düşürüldü
-                megaHunter.directionChangeTimer = Random.nextInt(20, 60)
+                megaHunter.directionChangeTimer = Random.nextInt(40, 120)
             }
         }
         megaHunter.x += megaHunter.vx
@@ -980,6 +1002,63 @@ class GalleryRescueGameView @JvmOverloads constructor(
         if (megaHunter.y - megaHunter.radius > playfield.bottom) megaHunter.y = playfield.top - megaHunter.radius
     }
 
+    // <<< YENİ: ArrowBoss'un davranış mantığı >>>
+    private fun updateArrowBoss(boss: Enemy) {
+        val arrowBossIdleSpeed = 1.5f // Mega boss'tan daha yavaş
+        boss.directionChangeTimer--
+        if (boss.directionChangeTimer <= 0) {
+            boss.vx = (Random.nextFloat() - 0.5f) * 2f * arrowBossIdleSpeed
+            boss.vy = (Random.nextFloat() - 0.5f) * 2f * arrowBossIdleSpeed
+            boss.directionChangeTimer = Random.nextInt(120, 240) // Daha yavaş yön değiştirir
+        }
+
+        boss.x += boss.vx
+        boss.y += boss.vy
+
+        // Ekran sınırlarına çarpınca yön değiştir
+        if (boss.x - boss.radius < playfield.left || boss.x + boss.radius > playfield.right) {
+            boss.vx *= -1
+            boss.x = boss.x.coerceIn(playfield.left + boss.radius, playfield.right - boss.radius)
+        }
+        if (boss.y - boss.radius < playfield.top || boss.y + boss.radius > playfield.bottom) {
+            boss.vy *= -1
+            boss.y = boss.y.coerceIn(playfield.top + boss.radius, playfield.bottom - boss.radius)
+        }
+
+        // Ok atma zamanlayıcısı
+        boss.arrowCooldown--
+        if (boss.arrowCooldown <= 0) {
+            fireArrows(boss.x, boss.y)
+            boss.arrowCooldown = Random.nextInt(240, 800) // Bir sonraki atış için rastgele bekleme süresi
+        }
+    }
+
+    // <<< YENİ: ArrowBoss'un etrafa ok fırlatmasını sağlayan fonksiyon >>>
+    private fun fireArrows(startX: Float, startY: Float) {
+        val arrowSpeed = 6f
+        val numberOfArrows = 8 // 8 yöne ok fırlat
+        for (i in 0 until numberOfArrows) {
+            val angle = (i.toFloat() / numberOfArrows) * 2 * PI.toFloat() // 360 derece / 8 yön
+            val vx = cos(angle) * arrowSpeed
+            val vy = sin(angle) * arrowSpeed
+            arrows.add(Arrow(startX, startY, vx, vy))
+        }
+    }
+
+    // <<< YENİ: Okların hareketini ve silinmesini yöneten fonksiyon >>>
+    private fun updateArrows() {
+        val iterator = arrows.iterator()
+        while(iterator.hasNext()) {
+            val arrow = iterator.next()
+            arrow.x += arrow.vx
+            arrow.y += arrow.vy
+
+            // Ok oyun alanının dışına çıkarsa sil
+            if (!playfield.contains(arrow.x, arrow.y)) {
+                iterator.remove()
+            }
+        }
+    }
 
     private fun updateMinion(enemy: Enemy) {
         val speedMultiplier = 1f + 0.2f * (getRevealedArea() / (playfield.width() * playfield.height()))
@@ -998,6 +1077,34 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private fun checkCollisions() {
         if(running.not()) return
 
+        // <<< YENİ: Ok çarpışma kontrolleri >>>
+        val arrowIterator = arrows.iterator()
+        while(arrowIterator.hasNext()) {
+            val arrow = arrowIterator.next()
+            // Ok oyuncuya çarptı mı?
+            val dxPlayer = arrow.x - playerX
+            val dyPlayer = arrow.y - playerY
+            if (dxPlayer * dxPlayer + dyPlayer * dyPlayer < (arrow.radius + playerRadius).let { it * it }) {
+                handlePlayerHit()
+                arrowIterator.remove() // Oku sil
+                return // Can kaybettikten sonra diğer kontrollere gerek yok
+            }
+
+            // Ok oyuncunun çizgisine çarptı mı?
+            if (isDrawingLine && currentLine.size > 1) {
+                for (i in 0 until currentLine.size - 1) {
+                    val p1 = currentLine[i]
+                    val p2 = currentLine[i + 1]
+                    val (distanceSquared, _) = distanceToSegmentSquared(p1, p2, PointF(arrow.x, arrow.y), returnPoint = false)
+                    if (distanceSquared < (arrow.radius + linePaint.strokeWidth).let { it * it }) {
+                        handlePlayerHit()
+                        arrowIterator.remove() // Oku sil
+                        return // Can kaybettikten sonra diğer kontrollere gerek yok
+                    }
+                }
+            }
+        }
+
         if (isDrawingLine && currentLine.size > 1) {
             for (enemy in enemies) {
                 for (i in 0 until currentLine.size - 1) {
@@ -1013,6 +1120,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
         else {
             for (enemy in enemies) {
+                // <<< YENİ: ArrowBoss'a dokunmak can kaybettirmez, sadece okları tehlikelidir >>>
                 if (enemy.isStalker) {
                     val dx = enemy.x - playerX
                     val dy = enemy.y - playerY
@@ -1067,3 +1175,4 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 }
+
