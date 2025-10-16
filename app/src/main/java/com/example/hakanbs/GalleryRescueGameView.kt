@@ -898,8 +898,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun updateHunter(hunter: Enemy) {
-        val hunterAggroSpeed = 7f
-        val hunterIdleSpeed = 2f
+        val hunterAggroSpeed = 7f * 1.1f // %10 arttırıldı
+        val hunterIdleSpeed = 2f * 1.1f // %10 arttırıldı
         if (isDrawingLine && currentLine.isNotEmpty()) {
             var closestPoint: PointF? = null
             var minDistanceSq = Float.MAX_VALUE
@@ -940,8 +940,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun updateMegaHunter(megaHunter: Enemy) {
-        val megaHunterAggroSpeed = 5f
-        val megaHunterIdleSpeed = 3f
+        val megaHunterAggroSpeed = 5f * 2.1f // %10 arttırıldı
+        val megaHunterIdleSpeed = 3f * 2.1f // %10 arttırıldı
         if (isDrawingLine && currentLine.isNotEmpty()) {
             var closestPoint: PointF? = null
             var minDistanceSq = Float.MAX_VALUE
@@ -968,7 +968,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
             if (megaHunter.directionChangeTimer <= 0) {
                 megaHunter.vx = (Random.nextFloat() - 0.5f) * 2f * megaHunterIdleSpeed
                 megaHunter.vy = (Random.nextFloat() - 0.5f) * 2f * megaHunterIdleSpeed
-                megaHunter.directionChangeTimer = Random.nextInt(60, 180)
+                // Daha sık ve rastgele yön değiştirmesi için aralığı düşürüldü
+                megaHunter.directionChangeTimer = Random.nextInt(20, 60)
             }
         }
         megaHunter.x += megaHunter.vx
