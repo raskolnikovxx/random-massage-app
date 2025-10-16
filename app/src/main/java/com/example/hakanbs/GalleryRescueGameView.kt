@@ -19,7 +19,6 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.core.graphics.drawable.toBitmap
 import coil.imageLoader
 import coil.request.ImageRequest
 import org.json.JSONObject
@@ -91,7 +90,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var playerX = 0f
     private var playerY = 0f
     private var playerRadius = 20f
-    // <<< DEĞİŞİKLİK: 'backgroundBitmap' artık 'backgroundDrawable' oldu >>>
     private var backgroundDrawable: Drawable? = null
     private var backgroundUrl: String? = null
 
@@ -681,26 +679,22 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // <<< DÜZELTME: `backgroundDrawable`'ı `Bitmap`'e çevirerek orijinal çizim mantığını kullan >>>
-        // Bu, `clipPath` ve ölçeklemenin %100 doğru çalışmasını garanti eder.
-        val bmp = if (backgroundDrawable is BitmapDrawable) {
-            (backgroundDrawable as BitmapDrawable).bitmap
-        } else {
-            // Animatable (GIF) ise, mevcut karesini Bitmap'e çiz
-            backgroundDrawable?.let {
-                if (it.intrinsicWidth <= 0 || it.intrinsicHeight <= 0) {
+        val bmp: Bitmap? = (backgroundDrawable)?.let { drawable: Drawable ->
+            if (drawable is BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
                     null
                 } else {
-                    val bitmap = Bitmap.createBitmap(it.intrinsicWidth, it.intrinsicHeight, Bitmap.Config.ARGB_8888)
+                    val bitmap = Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
                     val tempCanvas = Canvas(bitmap)
-                    it.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
-                    it.draw(tempCanvas)
+                    drawable.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
+                    drawable.draw(tempCanvas)
                     bitmap
                 }
             }
         }
-
-        bmp?.let {
+        bmp?.let { it: Bitmap ->
             val paint = Paint()
             paint.isAntiAlias = true
             paint.alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
@@ -823,9 +817,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     private fun updateEnemies() {
         if (revealPercent >= 50f && bossCount < 3) {
-            // Orijinal kodda boştu
+            // ...
         } else if (revealPercent >= 20f && bossCount < 2) {
-            // Orijinal kodda boştu
+            // ...
         }
         for (enemy in enemies) {
             when {
@@ -873,7 +867,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 stalker.vy = playerSpeed * 0.8f * Math.signum(playerY - stalker.y)
             } else {
                 stalker.vy = 0f
-                stalker.vx = playerSpeed * 0.8f * Math.signum(playerX - stalker.y)
+                stalker.vx = playerSpeed * 0.8f * Math.signum(playerX - stalker.x)
             }
         }
     }
@@ -960,7 +954,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         if (megaHunter.y - megaHunter.radius > playfield.bottom) megaHunter.y = playfield.top - megaHunter.radius
     }
 
-    // <<< DÜZELTME: Silinen speedMultiplier satırı geri eklendi >>>
+
     private fun updateMinion(enemy: Enemy) {
         val speedMultiplier = 1f + 0.2f * (getRevealedArea() / (playfield.width() * playfield.height()))
         enemy.x += enemy.vx * speedMultiplier
@@ -1047,4 +1041,3 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 }
-
