@@ -315,6 +315,33 @@ class GalleryRescueGameView @JvmOverloads constructor(
         handler.post(gameLoop)
     }
 
+    private var cachedBackgroundBitmap: Bitmap? = null
+    private var cachedBackgroundDrawable: Drawable? = null
+
+    private fun updateBackgroundCache() {
+        val drawable = backgroundDrawable
+        if (drawable == null) {
+            cachedBackgroundBitmap = null
+            cachedBackgroundDrawable = null
+            return
+        }
+        if (drawable == cachedBackgroundDrawable && cachedBackgroundBitmap != null) return
+        if (drawable is BitmapDrawable) {
+            cachedBackgroundBitmap = drawable.bitmap
+            cachedBackgroundDrawable = drawable
+        } else if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
+            val bitmap = Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
+            val tempCanvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
+            drawable.draw(tempCanvas)
+            cachedBackgroundBitmap = bitmap
+            cachedBackgroundDrawable = drawable
+        } else {
+            cachedBackgroundBitmap = null
+            cachedBackgroundDrawable = drawable
+        }
+    }
+
     private fun loadBackgroundFromJsonOrDefault() {
         val urlFromJson = try {
             val inputStream: InputStream = context.assets.open("default_config.json")
@@ -337,6 +364,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
     fun setBackgroundUrl(url: String?) {
         this.backgroundUrl = url
         loadBackgroundFromUrlOrDefault()
+        cachedBackgroundBitmap = null
+        cachedBackgroundDrawable = null
     }
 
     private fun loadBackgroundFromUrlOrDefault() {
@@ -679,30 +708,26 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val bmp: Bitmap? = (backgroundDrawable)?.let { drawable: Drawable ->
-            if (drawable is BitmapDrawable) {
-                drawable.bitmap
-            } else {
-                if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
-                    null
-                } else {
-                    val bitmap = Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
-                    val tempCanvas = Canvas(bitmap)
-                    drawable.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
-                    drawable.draw(tempCanvas)
-                    bitmap
+        updateBackgroundCache()
+        if (gameWon && backgroundDrawable is Animatable) {
+            // Animasyonlu drawable'ı doğrudan çiz ve animasyonu başlat
+            val animDrawable = backgroundDrawable!!
+            animDrawable.setBounds(playfield.left.toInt(), playfield.top.toInt(), playfield.right.toInt(), playfield.bottom.toInt())
+            animDrawable.draw(canvas)
+            (animDrawable as Animatable).start()
+        } else {
+            val bmp = cachedBackgroundBitmap
+            if (bmp != null) {
+                val paint = Paint().apply {
+                    isAntiAlias = true
+                    alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
                 }
-            }
-        }
-        bmp?.let { it: Bitmap ->
-            val paint = Paint()
-            paint.isAntiAlias = true
-            paint.alpha = if (gameWon) 255 else (255 * 0.8f).toInt()
-            for (path in revealedPaths) {
-                canvas.save()
-                canvas.clipPath(path)
-                canvas.drawBitmap(it, null, playfield, paint)
-                canvas.restore()
+                for (path in revealedPaths) {
+                    canvas.save()
+                    canvas.clipPath(path)
+                    canvas.drawBitmap(bmp, null, playfield, paint)
+                    canvas.restore()
+                }
             }
         }
 
