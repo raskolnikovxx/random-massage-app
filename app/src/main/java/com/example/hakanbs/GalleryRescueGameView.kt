@@ -6,7 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path // Path nesnesini kullanacağız
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Region
@@ -35,8 +35,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     // --- YARDIMCI KODLAR ---
     private enum class Edge { TOP, BOTTOM, LEFT, RIGHT }
+
     // --- DOKUNUŞ AYARLARI ---
-    private val TOUCH_START_RADIUS_MULTIPLIER = 3.5f // önce ~2.5’ti; çizime başlatma alanını azıcık büyüttük
+    private val TOUCH_START_RADIUS_MULTIPLIER = 3.5f // çizimi başlatma alanını büyüttük
 
     private fun getEdgeFromPoint(p: PointF, tolerance: Float = 15f): Edge? {
         if (p.y <= playfield.top + tolerance) return Edge.TOP
@@ -78,10 +79,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private fun isTouchOnPlayer(x: Float, y: Float): Boolean {
         val dx = x - playerX
         val dy = y - playerY
-        val touchRadius = playerRadius * TOUCH_START_RADIUS_MULTIPLIER  // <<< değiştirildi
+        val touchRadius = playerRadius * TOUCH_START_RADIUS_MULTIPLIER
         return dx * dx + dy * dy < touchRadius * touchRadius
     }
-
 
     // --- MANUEL KONTROL İÇİN DEĞİŞKENLER ---
     private val dpadButtons = mutableMapOf<String, RectF>()
@@ -89,7 +89,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var playerSpeed = 10f
     private var playerVx = 0f
     private var playerVy = 0f
-
 
     // --- TEMEL OYUN DEĞİŞKENLERİ ---
     private var playfield = RectF()
@@ -110,7 +109,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private val timerHandler = Handler(Looper.getMainLooper())
     private var totalRevealedArea = 0f
     private var revealPercent = 0f
-    private val winPercentage = 80f
+    private val winPercentage = 20f // istersen 80f yap
     private var timeOver = false
 
     // --- ÇİZİM İÇİN GEREKLİLER ---
@@ -141,7 +140,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         val isArrowBoss: Boolean = false,
         var directionChangeTimer: Int = 0,
         var arrowCooldown: Int = 120,
-        // <<< YENİ: Titreşim efekti için eklendi >>>
         var isPreparingAttack: Boolean = false,
         var prepareAttackTimer: Int = 0
     )
@@ -179,11 +177,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
+    // --- UI BUTON RECTLARI ---
+    private val restartButtonRect = RectF()      // Game Over için
+    private val nextLevelButtonRect = RectF()    // Win sonrası seviye atla için
+
     // --- PUAN BALONCUKLARI ---
     private data class ScoreBubble(var x: Float, var y: Float, val text: String, var alpha: Float = 1f, var dy: Float = -2f)
     private val scoreBubbles = mutableListOf<ScoreBubble>()
-
-    private val gameOverButtonRect = RectF()
 
     private val hudPaint = Paint().apply {
         color = Color.WHITE
@@ -194,6 +194,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     interface GameStateListener {
         fun onGameStateChanged(lives: Int, score: Long, timerSeconds: Int, revealPercent: Float)
+        fun onLevelChanged(newLevel: Int)
     }
 
     private var gameStateListener: GameStateListener? = null
@@ -222,6 +223,31 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return dx * dx + dy * dy > safeDistance * safeDistance
     }
 
+    // --- SEVİYE YÖNETİMİ ---
+    private var level = 1
+    private val maxLevel = 3
+    private var showNextLevelButton = false
+
+    // RemoteConfig erişimi
+    private lateinit var controlConfig: ControlConfig
+    private lateinit var remoteConfig: RemoteConfig
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        controlConfig = ControlConfig(context)
+        // Senin ControlConfig içinde local/son bilinen yapı var; fetchConfig Activity tarafında yapılıyor.
+        remoteConfig = controlConfig.getLocalConfig()
+    }
+
+    private fun getCurrentBackgroundUrl(): String? {
+        return when (level) {
+            1 -> remoteConfig.backgroundUrl1
+            2 -> remoteConfig.backgroundUrl2
+            3 -> remoteConfig.backgroundUrl3
+            else -> null
+        }?.takeIf { it.isNullOrBlank().not() }
+    }
+
     private fun setupNewGame() {
         (backgroundDrawable as? Animatable)?.stop()
 
@@ -235,6 +261,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
         enemies.clear()
         arrows.clear()
         bossCount = 1
+
+        // Minyonlar
         repeat(3) {
             var ex: Float
             var ey: Float
@@ -244,97 +272,76 @@ class GalleryRescueGameView @JvmOverloads constructor(
             } while (!isSafeSpawn(ex, ey))
             enemies.add(
                 Enemy(
-                    ex,
-                    ey,
+                    ex, ey,
                     (Random.nextFloat() - 0.5f) * 8f,
                     (Random.nextFloat() - 0.5f) * 8f,
                     18f
                 )
             )
         }
+
+        // Hunter
         var hx: Float
         var hy: Float
         do {
             hx = playfield.centerX()
             hy = playfield.centerY()
         } while (!isSafeSpawn(hx, hy, 180f))
-        hunterBoss = Enemy(
-            hx, hy,
-            2f, 2f, 30f, isHunter = true
-        )
+        hunterBoss = Enemy(hx, hy, 2f, 2f, 30f, isHunter = true)
         enemies.add(hunterBoss!!)
+
+        // Hunter 2
         do {
             hx = playfield.centerX() - 120f
             hy = playfield.centerY() + 120f
         } while (!isSafeSpawn(hx, hy, 180f))
-        val hunterBoss2 = Enemy(
-            hx, hy,
-            -2f, 2f, 30f, isHunter = true
-        )
+        val hunterBoss2 = Enemy(hx, hy, -2f, 2f, 30f, isHunter = true)
         enemies.add(hunterBoss2)
+
+        // Stalker
         var sx: Float
         var sy: Float
         do {
             sx = playfield.right
             sy = playfield.bottom
         } while (!isSafeSpawn(sx, sy, 180f))
-        stalkerBoss = Enemy(
-            sx, sy,
-            -playerSpeed * 0.8f, 0f,
-            22f,
-            isStalker = true
-        )
+        stalkerBoss = Enemy(sx, sy, -playerSpeed * 0.8f, 0f, 22f, isStalker = true)
         enemies.add(stalkerBoss!!)
+
+        // MegaHunter 1
         var mx: Float
         var my: Float
         do {
             mx = playfield.centerX() + 100f
             my = playfield.centerY() - 100f
         } while (!isSafeSpawn(mx, my, 200f))
-        megaHunterBoss = Enemy(
-            mx, my,
-            1f, -1f,
-            85f,
-            isMegaHunter = true,
-            directionChangeTimer = 60
-        )
+        megaHunterBoss = Enemy(mx, my, 1f, -1f, 85f, isMegaHunter = true, directionChangeTimer = 60)
         enemies.add(megaHunterBoss!!)
+
+        // MegaHunter 2
         do {
             mx = playfield.centerX() - 100f
             my = playfield.centerY() + 100f
         } while (!isSafeSpawn(mx, my, 200f))
-        val megaHunterBoss2 = Enemy(
-            mx, my,
-            -1f, 1f,
-            85f,
-            isMegaHunter = true,
-            directionChangeTimer = 90
-        )
+        val megaHunterBoss2 = Enemy(mx, my, -1f, 1f, 85f, isMegaHunter = true, directionChangeTimer = 90)
         enemies.add(megaHunterBoss2)
 
+        // Arrow Boss
         var ax: Float
         var ay: Float
         do {
             ax = playfield.centerX()
             ay = playfield.top + 150f
         } while (!isSafeSpawn(ax, ay, 250f))
-        arrowBoss = Enemy(
-            ax, ay,
-            1f, 1f,
-            40f,
-            isArrowBoss = true,
-            directionChangeTimer = 100,
-            arrowCooldown = 180 // İlk atış için biraz daha uzun bekleme (3 saniye)
-        )
+        arrowBoss = Enemy(ax, ay, 1f, 1f, 40f, isArrowBoss = true, directionChangeTimer = 100, arrowCooldown = 180)
         enemies.add(arrowBoss!!)
 
+        // --- ARKA PLAN ---
+        // View kendi başına RemoteConfig fetch etmez; Activity bunu yapıp setBackgroundUrl çağırır.
+        // Yine de burada güncel URL varsa set edelim (boşsa dokunmuyoruz).
+        getCurrentBackgroundUrl()?.let { setBackgroundUrl(it) }
 
-        if (backgroundUrl.isNullOrBlank()) {
-            loadBackgroundFromJsonOrDefault()
-        } else {
-            loadBackgroundFromUrlOrDefault()
-        }
-
+        // --- OYUN DURUMLARI ---
         lives = 3
         isDrawingLine = false
         running = true
@@ -344,17 +351,15 @@ class GalleryRescueGameView @JvmOverloads constructor(
         timerSeconds = 99
         totalRevealedArea = 0f
         revealPercent = 0f
-        // --- ZAMANLAYICI DEVRE DIŞI ---
-        /*
-        startTimer()
-        */
-        // --- ZAMANLAYICI DEVRE DIŞI ---
+        showNextLevelButton = false
+
         gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
         invalidate()
         handler.removeCallbacks(gameLoop)
         handler.post(gameLoop)
     }
 
+    // Eski JSON fallback'i gerekiyorsa burada hazır (kullanılmıyor)
     private fun loadBackgroundFromJsonOrDefault() {
         val urlFromJson = try {
             val inputStream: InputStream = context.assets.open("default_config.json")
@@ -375,18 +380,18 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     fun setBackgroundUrl(url: String?) {
-        this.backgroundUrl = url
-        loadBackgroundFromUrlOrDefault()
+        // Boş/blank ise mevcut background’u koru; fallback’e dönme
+        if (!url.isNullOrBlank()) {
+            this.backgroundUrl = url
+            loadBackgroundFromUrlOrDefault()
+        }
     }
 
     private fun loadBackgroundFromUrlOrDefault() {
         val dataToLoad = if (!backgroundUrl.isNullOrBlank()) {
             backgroundUrl
         } else {
-            val bmp = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
-            this.backgroundDrawable = BitmapDrawable(resources, bmp)
-            invalidate()
-            return
+            return // hiç dokunmama, mevcut görsel kalsın
         }
 
         val imageLoader = context.imageLoader
@@ -401,9 +406,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     invalidate()
                 },
                 onError = {
-                    backgroundDrawable?.callback = null
-                    val bmp = BitmapFactory.decodeResource(resources, R.drawable.arkaplan_resmi)
-                    backgroundDrawable = BitmapDrawable(resources, bmp)
+                    // Hata olursa yerel fallback’e dönme; mevcut görseli koru
                     invalidate()
                 }
             )
@@ -417,30 +420,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     // --- ZAMANLAYICI DEVRE DIŞI ---
     /*
-    private fun startTimer() {
-        timerHandler.removeCallbacksAndMessages(null)
-        timerHandler.post(object : Runnable {
-            override fun run() {
-                if (running && !gameOver && !gameWon && timerSeconds > 0) {
-                    timerSeconds--
-                    gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
-                    timerHandler.postDelayed(this, 1000)
-                } else if (timerSeconds <= 0) {
-                    handleTimeOver()
-                }
-            }
-        })
-    }
-
-    private fun handleTimeOver() {
-        timeOver = true
-        gameOver = true
-        running = false
-        gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
-        invalidate()
-    }
+    private fun startTimer() { ... }
+    private fun handleTimeOver() { ... }
     */
-    // --- ZAMANLAYICI DEVRE DIŞI ---
 
     private fun setupDpadButtons() {
         val buttonSize = 160f
@@ -456,14 +438,23 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if ((gameOver || gameWon) && event.action == MotionEvent.ACTION_DOWN) {
-            if (gameOverButtonRect.contains(event.x, event.y)) {
+        // Kazanıldıysa: Seviye atla butonu
+        if (gameWon && event.action == MotionEvent.ACTION_DOWN) {
+            if (nextLevelButtonRect.contains(event.x, event.y)) {
+                goToNextLevel()
+                return true
+            }
+        }
+
+        // Game Over ise: Yeniden Oyna butonu
+        if (gameOver && event.action == MotionEvent.ACTION_DOWN) {
+            if (restartButtonRect.contains(event.x, event.y)) {
                 restartGame()
                 return true
             }
         }
-        if (gameOver || gameWon) return false
 
+        if (gameOver || gameWon) return false
 
         val touchX = event.x
         val touchY = event.y
@@ -594,7 +585,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-
     private fun getRevealedArea(): Float {
         if (revealedPaths.isEmpty()) return 0f
         val region = Region()
@@ -665,6 +655,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             val areaScore = (capturedPercent * 100).toLong()
             score += areaScore
             scoreBubbles.add(ScoreBubble(playerX, playerY - 40f, "+$areaScore"))
+
             val enemiesToRemove = mutableListOf<Enemy>()
             for (enemy in enemies) {
                 if (enemy.isHunter || enemy.isStalker || enemy.isMegaHunter || enemy.isArrowBoss) continue
@@ -677,10 +668,12 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 }
             }
             enemies.removeAll(enemiesToRemove)
+
             if (totalPlayfieldArea > 0) {
                 revealPercent = (totalRevealedArea / totalPlayfieldArea) * 100f
             }
             gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
+
             if (revealPercent >= winPercentage) {
                 val fullPath = Path()
                 fullPath.addRect(playfield, Path.Direction.CW)
@@ -720,7 +713,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val bmp: Bitmap? = backgroundDrawable?.let { drawable ->
@@ -752,6 +744,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
 
         canvas.drawRect(playfield, borderPaint)
+
         for (enemy in enemies) {
             val paintToUse = when {
                 enemy.isMegaHunter -> megaHunterPaint
@@ -798,11 +791,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 canvas.drawCircle(drawX, drawY, enemy.radius, paintToUse)
             }
         }
+
         for (arrow in arrows) {
             canvas.drawCircle(arrow.x, arrow.y, arrow.radius, arrowPaint)
         }
 
         canvas.drawCircle(playerX, playerY, playerRadius, playerPaint)
+
         dpadButtons.forEach { (direction, rect) ->
             val cx = rect.centerX()
             val cy = rect.centerY()
@@ -838,6 +833,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             canvas.drawText(bubble.text, bubble.x, bubble.y, bubblePaint)
             if (bubble.alpha <= 0f) iterator.remove()
         }
+
         if (gameOver) {
             val centerX = width / 2f
             val centerY = height / 2f
@@ -857,12 +853,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 textSize = 60f
                 textAlign = Paint.Align.CENTER
             }
-            gameOverButtonRect.set(centerX - 250f, centerY + 50f, centerX + 250f, centerY + 200f)
-            canvas.drawRect(gameOverButtonRect, buttonPaint)
+            restartButtonRect.set(centerX - 250f, centerY + 50f, centerX + 250f, centerY + 200f)
+            canvas.drawRect(restartButtonRect, buttonPaint)
             canvas.drawText("Yeniden Oyna", centerX, centerY + 135f, buttonTextPaint)
 
             return
         }
+
         if (gameWon) {
             val centerX = width / 2f
             val centerY = height / 2f
@@ -874,14 +871,28 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 setShadowLayer(12f, 0f, 0f, Color.BLACK)
             }
             canvas.drawText("OYUN TAMAMLANDI!", centerX, centerY, paint)
+
+            if (level < maxLevel) {
+                showNextLevelButton = true
+            }
+        }
+
+        if (showNextLevelButton) {
+            val centerX = width / 2f
+            val topY = 120f // HUD altı
+            nextLevelButtonRect.set(centerX - 250f, topY, centerX + 250f, topY + 100f)
+            val buttonPaint = Paint().apply { color = Color.BLUE; style = Paint.Style.FILL }
+            val buttonTextPaint = Paint().apply { color = Color.WHITE; textSize = 60f; textAlign = Paint.Align.CENTER }
+            canvas.drawRect(nextLevelButtonRect, buttonPaint)
+            canvas.drawText("${level + 1}. seviyeye geç", centerX, topY + 65f, buttonTextPaint)
         }
     }
 
     private fun updateEnemies() {
         if (revealPercent >= 50f && bossCount < 3) {
-            // ...
+            // ileride eklenebilir
         } else if (revealPercent >= 20f && bossCount < 2) {
-            // ...
+            // ileride eklenebilir
         }
         for (enemy in enemies) {
             when {
@@ -914,7 +925,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
             }
         } else {
             if (stalker.vx == 0f && stalker.vy == 0f) {
-                if(currentEdge == Edge.TOP || currentEdge == Edge.BOTTOM) stalker.vx = playerSpeed * 0.8f
+                if (currentEdge == Edge.TOP || currentEdge == Edge.BOTTOM) stalker.vx = playerSpeed * 0.8f
                 else stalker.vy = playerSpeed * 0.8f
             }
         }
@@ -925,7 +936,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         val onCorner = (stalker.x == playfield.left || stalker.x == playfield.right) &&
                 (stalker.y == playfield.top || stalker.y == playfield.bottom)
         if (onCorner) {
-            if(playerEdge == Edge.LEFT || playerEdge == Edge.RIGHT){
+            if (playerEdge == Edge.LEFT || playerEdge == Edge.RIGHT) {
                 stalker.vx = 0f
                 stalker.vy = playerSpeed * 0.8f * Math.signum(playerY - stalker.y)
             } else {
@@ -936,7 +947,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun updateHunter(hunter: Enemy) {
-        val hunterAggroSpeed = 8.5f
+        val hunterAggroSpeed = 8.5f * getLevelMultiplier()
         val hunterIdleSpeed = 2.5f
 
         if (isDrawingLine && currentLine.isNotEmpty()) {
@@ -979,7 +990,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun updateMegaHunter(megaHunter: Enemy) {
-        val megaHunterAggroSpeed = 6f
+        val megaHunterAggroSpeed = 6f * getLevelMultiplier()
         val megaHunterIdleSpeed = 3.5f
 
         if (isDrawingLine && currentLine.isNotEmpty()) {
@@ -1070,7 +1081,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     private fun updateArrows() {
         val iterator = arrows.iterator()
-        while(iterator.hasNext()) {
+        while (iterator.hasNext()) {
             val arrow = iterator.next()
             arrow.x += arrow.vx
             arrow.y += arrow.vy
@@ -1096,10 +1107,10 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun checkCollisions() {
-        if(running.not()) return
+        if (running.not()) return
 
         val arrowIterator = arrows.iterator()
-        while(arrowIterator.hasNext()) {
+        while (arrowIterator.hasNext()) {
             val arrow = arrowIterator.next()
             if (isDrawingLine && currentLine.size > 1) {
                 for (i in 0 until currentLine.size - 1) {
@@ -1127,8 +1138,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                     }
                 }
             }
-        }
-        else {
+        } else {
             for (enemy in enemies) {
                 if (enemy.isStalker) {
                     val dx = enemy.x - playerX
@@ -1159,7 +1169,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun checkEnemyLineCollision() {
-        // Bu fonksiyon artık checkCollisions içinde yönetiliyor.
+        // Artık checkCollisions içinde yönetiliyor.
     }
 
     private fun distanceToSegmentSquared(p1: PointF, p2: PointF, p: PointF, returnPoint: Boolean): Pair<Float, PointF?> {
@@ -1181,6 +1191,24 @@ class GalleryRescueGameView @JvmOverloads constructor(
         for (enemy in enemies) {
             enemy.x = -1000f
             enemy.y = -1000f
+        }
+    }
+
+    private fun getLevelMultiplier(): Float {
+        return when (level) {
+            1 -> 0.8f
+            2 -> 1.0f
+            3 -> 1.2f
+            else -> 1.0f
+        }
+    }
+
+    private fun goToNextLevel() {
+        if (level < maxLevel) {
+            level++
+            setupNewGame()
+            gameStateListener?.onLevelChanged(level)
+            invalidate()
         }
     }
 }

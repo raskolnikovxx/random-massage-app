@@ -1,5 +1,8 @@
 {
-  "galleryRescueBackgroundUrl": "",
+  "galleryRescueBackgroundUrl1": "",
+  "galleryRescueBackgroundUrl2": "",
+  "galleryRescueBackgroundUrl3": "",
+
   "enabled": true,
   "startHour": 22,
   "endHour": 23,

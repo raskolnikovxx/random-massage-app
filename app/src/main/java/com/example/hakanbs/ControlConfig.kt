@@ -59,7 +59,10 @@ data class RemoteConfig(
     val coupons: List<Coupon> = emptyList(),
     // Yeni alan
     val randomDaily: RandomDaily = RandomDaily(),
-    val galleryRescueBackgroundUrl: String? = null
+    // Yeni: Seviye arka plan url'leri
+    val backgroundUrl1: String = "",
+    val backgroundUrl2: String = "",
+    val backgroundUrl3: String = ""
 )
 
 data class NotificationHistory(
@@ -125,24 +128,8 @@ class ControlConfig(private val context: Context) {
             }
 
             val remote = gson.fromJson(jsonString, RemoteConfig::class.java)
-
-            // Merge remote with embedded defaults (assets) so app uses both sets. Remote takes precedence.
-            val merged = mergeWithDefaults(remote)
-
-            // Ensure sentences have stable, unique ids.
-            val validatedConfig = ensureSentenceIds(merged)
-
-            // Eğer randomDaily etkinse ama pool boşsa, tüm sentence id'lerini otomatik kullan.
-            val finalConfig = if (validatedConfig.randomDaily.enabled && validatedConfig.randomDaily.pool.isEmpty()) {
-                val allIds = validatedConfig.sentences.map { it.id }
-                validatedConfig.copy(randomDaily = validatedConfig.randomDaily.copy(pool = allIds))
-            } else {
-                validatedConfig
-            }
-
-            saveConfigLocally(finalConfig)
-            Log.d(TAG, "Config fetched, merged with defaults, validated and saved successfully.")
-            return@withContext finalConfig
+            // Sadece remote config kullanılıyor, yerel fallback kaldırıldı
+            return@withContext remote
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching config from Firebase: ${e.message}")
             return@withContext null
@@ -187,7 +174,9 @@ class ControlConfig(private val context: Context) {
                 decisionWheel = if (remote.decisionWheel.options.isNotEmpty()) remote.decisionWheel else defaults.decisionWheel,
                 coupons = if (remote.coupons.isNotEmpty()) remote.coupons else defaults.coupons,
                 randomDaily = mergedRandomDaily,
-                galleryRescueBackgroundUrl = if (!remote.galleryRescueBackgroundUrl.isNullOrBlank()) remote.galleryRescueBackgroundUrl else defaults.galleryRescueBackgroundUrl
+                backgroundUrl1 = if (!remote.backgroundUrl1.isNullOrBlank()) remote.backgroundUrl1 else defaults.backgroundUrl1,
+                backgroundUrl2 = if (!remote.backgroundUrl2.isNullOrBlank()) remote.backgroundUrl2 else defaults.backgroundUrl2,
+                backgroundUrl3 = if (!remote.backgroundUrl3.isNullOrBlank()) remote.backgroundUrl3 else defaults.backgroundUrl3
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load defaults for merge: ${e.message}")
