@@ -42,6 +42,7 @@ class GalleryRescueActivity : AppCompatActivity(), GalleryRescueGameView.GameSta
 
         // Aynı seviyeyi yeniden başlatmak istersen:
         btnRestart.setOnClickListener {
+            currentLevel = 1 // Her restart'ta 1. seviyeye dön
             applyRemoteBgAndRestart(currentLevel)
         }
     }
