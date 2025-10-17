@@ -35,6 +35,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     // --- YARDIMCI KODLAR ---
     private enum class Edge { TOP, BOTTOM, LEFT, RIGHT }
+    // --- DOKUNUŞ AYARLARI ---
+    private val TOUCH_START_RADIUS_MULTIPLIER = 3.5f // önce ~2.5’ti; çizime başlatma alanını azıcık büyüttük
 
     private fun getEdgeFromPoint(p: PointF, tolerance: Float = 15f): Edge? {
         if (p.y <= playfield.top + tolerance) return Edge.TOP
@@ -76,9 +78,10 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private fun isTouchOnPlayer(x: Float, y: Float): Boolean {
         val dx = x - playerX
         val dy = y - playerY
-        val touchRadius = playerRadius * 2.5f
+        val touchRadius = playerRadius * TOUCH_START_RADIUS_MULTIPLIER  // <<< değiştirildi
         return dx * dx + dy * dy < touchRadius * touchRadius
     }
+
 
     // --- MANUEL KONTROL İÇİN DEĞİŞKENLER ---
     private val dpadButtons = mutableMapOf<String, RectF>()
@@ -92,7 +95,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private var playfield = RectF()
     private var playerX = 0f
     private var playerY = 0f
-    private var playerRadius = 20f
+    private var playerRadius = 32f
     private var backgroundDrawable: Drawable? = null
     private var backgroundUrl: String? = null
 
@@ -341,7 +344,11 @@ class GalleryRescueGameView @JvmOverloads constructor(
         timerSeconds = 99
         totalRevealedArea = 0f
         revealPercent = 0f
+        // --- ZAMANLAYICI DEVRE DIŞI ---
+        /*
         startTimer()
+        */
+        // --- ZAMANLAYICI DEVRE DIŞI ---
         gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
         invalidate()
         handler.removeCallbacks(gameLoop)
@@ -408,6 +415,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return super.verifyDrawable(who) || who === backgroundDrawable
     }
 
+    // --- ZAMANLAYICI DEVRE DIŞI ---
+    /*
     private fun startTimer() {
         timerHandler.removeCallbacksAndMessages(null)
         timerHandler.post(object : Runnable {
@@ -430,6 +439,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
         gameStateListener?.onGameStateChanged(lives, score, timerSeconds, revealPercent)
         invalidate()
     }
+    */
+    // --- ZAMANLAYICI DEVRE DIŞI ---
 
     private fun setupDpadButtons() {
         val buttonSize = 160f
@@ -486,7 +497,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
                         val dx = clampedX - lastPoint.x
                         val dy = clampedY - lastPoint.y
                         val distanceSquared = dx * dx + dy * dy
-                        val maxDistancePerFrame = playerSpeed * 30
+                        val maxDistancePerFrame = playerSpeed * 52
                         if (distanceSquared > maxDistancePerFrame * maxDistancePerFrame) {
                             isDrawingLine = false
                             currentLine.clear()
@@ -1173,4 +1184,3 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 }
-
