@@ -11,14 +11,17 @@ import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Region
 import android.graphics.drawable.Animatable
+import android.graphics.drawable.AnimationDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.vectordrawable.graphics.drawable.Animatable2Compat
 import coil.imageLoader
 import coil.request.ImageRequest
 import org.json.JSONObject
@@ -37,7 +40,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private enum class Edge { TOP, BOTTOM, LEFT, RIGHT }
 
     // --- DOKUNUŞ AYARLARI ---
-    private val TOUCH_START_RADIUS_MULTIPLIER = 3.5f // çizimi başlatma alanını büyüttük
+    private val TOUCH_START_RADIUS_MULTIPLIER = 3.5f
 
     private fun getEdgeFromPoint(p: PointF, tolerance: Float = 15f): Edge? {
         if (p.y <= playfield.top + tolerance) return Edge.TOP
@@ -83,7 +86,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         return dx * dx + dy * dy < touchRadius * touchRadius
     }
 
-    // --- MANUEL KONTROL İÇİN DEĞİŞKENLER ---
+    // --- MANUEL KONTROL ---
     private val dpadButtons = mutableMapOf<String, RectF>()
     private val dpadPaint = Paint().apply { color = Color.argb(100, 255, 255, 255) }
     private var playerSpeed = 10f
@@ -109,16 +112,16 @@ class GalleryRescueGameView @JvmOverloads constructor(
     private val timerHandler = Handler(Looper.getMainLooper())
     private var totalRevealedArea = 0f
     private var revealPercent = 0f
-    private val winPercentage = 20f // istersen 80f yap
+    private val winPercentage = 20f
     private var timeOver = false
 
-    // --- ÇİZİM İÇİN GEREKLİLER ---
+    // --- ÇİZİM ---
     private var currentLine = mutableListOf<PointF>()
     private val revealedPaths = mutableListOf<Path>()
     private val revealedRegion = Region()
     private val drawingPath = Path()
 
-    // --- PAINT NESNELERİ ---
+    // --- BOYALAR ---
     private val playerPaint = Paint().apply { color = Color.RED }
     private val linePaint = Paint().apply {
         color = Color.YELLOW
@@ -178,8 +181,9 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     // --- UI BUTON RECTLARI ---
-    private val restartButtonRect = RectF()      // Game Over için
-    private val nextLevelButtonRect = RectF()    // Win sonrası seviye atla için
+    private val restartButtonRect = RectF()
+    private val nextLevelButtonRect = RectF()
+    private val finishRestartButtonRect = RectF()
 
     // --- PUAN BALONCUKLARI ---
     private data class ScoreBubble(var x: Float, var y: Float, val text: String, var alpha: Float = 1f, var dy: Float = -2f)
@@ -235,7 +239,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         controlConfig = ControlConfig(context)
-        // Senin ControlConfig içinde local/son bilinen yapı var; fetchConfig Activity tarafında yapılıyor.
         remoteConfig = controlConfig.getLocalConfig()
     }
 
@@ -250,6 +253,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     private fun setupNewGame() {
         (backgroundDrawable as? Animatable)?.stop()
+        unregisterGifCallbackIfAny()
 
         val padding = 80f
         playfield.set(padding, padding * 2, width - padding, height - padding - 300f)
@@ -337,8 +341,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         enemies.add(arrowBoss!!)
 
         // --- ARKA PLAN ---
-        // View kendi başına RemoteConfig fetch etmez; Activity bunu yapıp setBackgroundUrl çağırır.
-        // Yine de burada güncel URL varsa set edelim (boşsa dokunmuyoruz).
         getCurrentBackgroundUrl()?.let { setBackgroundUrl(it) }
 
         // --- OYUN DURUMLARI ---
@@ -359,7 +361,7 @@ class GalleryRescueGameView @JvmOverloads constructor(
         handler.post(gameLoop)
     }
 
-    // Eski JSON fallback'i gerekiyorsa burada hazır (kullanılmıyor)
+    // JSON fallback (kullanılmıyor ama dursun)
     private fun loadBackgroundFromJsonOrDefault() {
         val urlFromJson = try {
             val inputStream: InputStream = context.assets.open("default_config.json")
@@ -379,8 +381,73 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
+    // --- GIF LOOP CALLBACK YÖNETİMİ ---
+    private var compatLoopCallback: Animatable2Compat.AnimationCallback? = null
+    private var a28LoopCallback: android.graphics.drawable.Animatable2.AnimationCallback? = null
+
+    private fun unregisterGifCallbackIfAny() {
+        backgroundDrawable?.let { d ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                (d as? android.graphics.drawable.AnimatedImageDrawable)?.let { aid ->
+                    a28LoopCallback?.let { cb -> aid.unregisterAnimationCallback(cb) }
+                }
+                a28LoopCallback = null
+            }
+            (d as? Animatable2Compat)?.let { a2c ->
+                compatLoopCallback?.let { cb -> a2c.unregisterAnimationCallback(cb) }
+            }
+            compatLoopCallback = null
+        }
+    }
+
+    /** Decoder çıktısını sonsuz döngüye hazırlar (başlatmaz). */
+    private fun prepareDrawableForInfiniteLoop(drawable: Drawable) {
+        unregisterGifCallbackIfAny()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            (drawable as? android.graphics.drawable.AnimatedImageDrawable)?.let { aid ->
+                // Sonsuz loop
+                aid.repeatCount = android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE
+                // Bitince otomatik yeniden başlat
+                a28LoopCallback = object : android.graphics.drawable.Animatable2.AnimationCallback() {
+                    override fun onAnimationEnd(d: Drawable?) {
+                        post {
+                            try { (d as? android.graphics.drawable.AnimatedImageDrawable)?.start() } catch (_: Throwable) {}
+                        }
+                    }
+                }
+                a28LoopCallback?.let { cb -> aid.registerAnimationCallback(cb) } // instance method
+                try { aid.stop() } catch (_: Throwable) {}
+                return
+            }
+        }
+
+        (drawable as? AnimationDrawable)?.let { ad ->
+            ad.isOneShot = false
+            try { ad.stop() } catch (_: Throwable) {}
+            return
+        }
+
+        if (drawable is Animatable2Compat) {
+            compatLoopCallback = object : Animatable2Compat.AnimationCallback() {
+                override fun onAnimationEnd(d: Drawable?) {
+                    post {
+                        try { (d as? Animatable2Compat)?.start() } catch (_: Throwable) {}
+                    }
+                }
+            }
+            // Hakan'ın istediği instance metodları:
+            drawable.registerAnimationCallback(compatLoopCallback!!)
+            try { drawable.stop() } catch (_: Throwable) {}
+            return
+        }
+
+        (drawable as? Animatable)?.let {
+            try { it.stop() } catch (_: Throwable) {}
+        }
+    }
+
     fun setBackgroundUrl(url: String?) {
-        // Boş/blank ise mevcut background’u koru; fallback’e dönme
         if (!url.isNullOrBlank()) {
             this.backgroundUrl = url
             loadBackgroundFromUrlOrDefault()
@@ -388,25 +455,26 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun loadBackgroundFromUrlOrDefault() {
-        val dataToLoad = if (!backgroundUrl.isNullOrBlank()) {
-            backgroundUrl
-        } else {
-            return // hiç dokunmama, mevcut görsel kalsın
-        }
-
+        val dataToLoad = backgroundUrl ?: return
         val imageLoader = context.imageLoader
         val request = ImageRequest.Builder(context)
             .data(dataToLoad)
+            .allowHardware(false) // AnimatedImageDrawable için güvenli
             .target(
                 onSuccess = { result ->
+                    unregisterGifCallbackIfAny()
+
                     backgroundDrawable?.callback = null
                     backgroundDrawable = result
                     backgroundDrawable?.callback = this@GalleryRescueGameView
-                    (backgroundDrawable as? Animatable)?.stop()
+
+                    // Decode olur olmaz sonsuz döngüye hazırla (başlatma):
+                    prepareDrawableForInfiniteLoop(backgroundDrawable!!)
+
                     invalidate()
                 },
                 onError = {
-                    // Hata olursa yerel fallback’e dönme; mevcut görseli koru
+                    // Hata olursa mevcut görseli koru
                     invalidate()
                 }
             )
@@ -417,12 +485,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
     override fun verifyDrawable(who: Drawable): Boolean {
         return super.verifyDrawable(who) || who === backgroundDrawable
     }
-
-    // --- ZAMANLAYICI DEVRE DIŞI ---
-    /*
-    private fun startTimer() { ... }
-    private fun handleTimeOver() { ... }
-    */
 
     private fun setupDpadButtons() {
         val buttonSize = 160f
@@ -438,15 +500,20 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Kazanıldıysa: Seviye atla butonu
         if (gameWon && event.action == MotionEvent.ACTION_DOWN) {
             if (nextLevelButtonRect.contains(event.x, event.y)) {
                 goToNextLevel()
                 return true
             }
+            if (level >= maxLevel && finishRestartButtonRect.contains(event.x, event.y)) {
+                level = 1
+                setupNewGame()
+                gameStateListener?.onLevelChanged(level)
+                invalidate()
+                return true
+            }
         }
 
-        // Game Over ise: Yeniden Oyna butonu
         if (gameOver && event.action == MotionEvent.ACTION_DOWN) {
             if (restartButtonRect.contains(event.x, event.y)) {
                 restartGame()
@@ -685,7 +752,8 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 score += timerSeconds * 100L
                 timerHandler.removeCallbacksAndMessages(null)
                 moveEnemiesOffScreen()
-                (backgroundDrawable as? Animatable)?.start()
+                // GIF sonsuz döngü için önceden hazırlandı; şimdi sadece başlatıyoruz.
+                startBackgroundAnimationLooping()
             }
         }
     }
@@ -722,7 +790,11 @@ class GalleryRescueGameView @JvmOverloads constructor(
                 if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
                     null
                 } else {
-                    val bitmap = Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
+                    val bitmap = Bitmap.createBitmap(
+                        drawable.intrinsicWidth,
+                        drawable.intrinsicHeight,
+                        Bitmap.Config.ARGB_8888
+                    )
                     val tempCanvas = Canvas(bitmap)
                     drawable.setBounds(0, 0, tempCanvas.width, tempCanvas.height)
                     drawable.draw(tempCanvas)
@@ -874,12 +946,18 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
             if (level < maxLevel) {
                 showNextLevelButton = true
+            } else {
+                val buttonPaint = Paint().apply { color = Color.BLUE; style = Paint.Style.FILL }
+                val buttonTextPaint = Paint().apply { color = Color.WHITE; textSize = 60f; textAlign = Paint.Align.CENTER }
+                finishRestartButtonRect.set(centerX - 250f, centerY + 60f, centerX + 250f, centerY + 160f)
+                canvas.drawRect(finishRestartButtonRect, buttonPaint)
+                canvas.drawText("Yeniden Oyna", centerX, centerY + 125f, buttonTextPaint)
             }
         }
 
         if (showNextLevelButton) {
             val centerX = width / 2f
-            val topY = 120f // HUD altı
+            val topY = 120f
             nextLevelButtonRect.set(centerX - 250f, topY, centerX + 250f, topY + 100f)
             val buttonPaint = Paint().apply { color = Color.BLUE; style = Paint.Style.FILL }
             val buttonTextPaint = Paint().apply { color = Color.WHITE; textSize = 60f; textAlign = Paint.Align.CENTER }
@@ -1168,25 +1246,6 @@ class GalleryRescueGameView @JvmOverloads constructor(
         }
     }
 
-    private fun checkEnemyLineCollision() {
-        // Artık checkCollisions içinde yönetiliyor.
-    }
-
-    private fun distanceToSegmentSquared(p1: PointF, p2: PointF, p: PointF, returnPoint: Boolean): Pair<Float, PointF?> {
-        val l2 = (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y)
-        if (l2 == 0f) {
-            val distSq = (p.x - p1.x) * (p.x - p1.x) + (p.y - p1.y) * (p.y - p1.y)
-            return distSq to (if (returnPoint) p1 else null)
-        }
-        val t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / l2
-        val clampedT = t.coerceIn(0f, 1f)
-        val closestX = p1.x + clampedT * (p2.x - p1.x)
-        val closestY = p1.y + clampedT * (p2.y - p1.y)
-        val distSq = (p.x - closestX) * (p.x - closestX) + (p.y - closestY) * (p.y - closestY)
-        val closestPoint = PointF(closestX, closestY)
-        return distSq to (if (returnPoint) closestPoint else null)
-    }
-
     private fun moveEnemiesOffScreen() {
         for (enemy in enemies) {
             enemy.x = -1000f
@@ -1210,5 +1269,42 @@ class GalleryRescueGameView @JvmOverloads constructor(
             gameStateListener?.onLevelChanged(level)
             invalidate()
         }
+    }
+
+    /** Kazanıldığında döngüyü başlat. Ayarlar decode anında yapılmış durumda. */
+    private fun startBackgroundAnimationLooping() {
+        backgroundDrawable?.let { d ->
+            try {
+                when {
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && d is android.graphics.drawable.AnimatedImageDrawable -> d.start()
+                    d is AnimationDrawable -> d.start()
+                    d is Animatable2Compat -> d.start()
+                    d is Animatable -> d.start()
+                }
+            } catch (_: Throwable) { }
+        }
+    }
+
+    /**
+     * İki nokta arasındaki çizgi segmentine bir noktanın olan en kısa mesafesini hesaplar.
+     * @param p1 Çizgi segmentinin başlangıç noktası.
+     * @param p2 Çizgi segmentinin bitiş noktası.
+     * @param p Kontrol edilecek nokta.
+     * @param returnPoint En yakın noktayı döndürmek için true.
+     * @return Mesafenin karesi ve isteğe bağlı olarak en yakın nokta.
+     */
+    private fun distanceToSegmentSquared(p1: PointF, p2: PointF, p: PointF, returnPoint: Boolean): Pair<Float, PointF?> {
+        val l2 = (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y)
+        if (l2 == 0f) {
+            val distSq = (p.x - p1.x) * (p.x - p1.x) + (p.y - p1.y) * (p.y - p1.y)
+            return distSq to (if (returnPoint) p1 else null)
+        }
+        val t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / l2
+        val clampedT = t.coerceIn(0f, 1f)
+        val closestX = p1.x + clampedT * (p2.x - p1.x)
+        val closestY = p1.y + clampedT * (p2.y - p1.y)
+        val distSq = (p.x - closestX) * (p.x - closestX) + (p.y - closestY) * (p.y - closestY)
+        val closestPoint = PointF(closestX, closestY)
+        return distSq to (if (returnPoint) closestPoint else null)
     }
 }
