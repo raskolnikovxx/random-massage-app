@@ -31,6 +31,9 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
      */
     fun scheduleAllNotifications(forceReschedule: Boolean = true) {
         val todayKey = getTodayString()
+        val limit = config.timesPerDay
+        val scheduledToday = prefs.getInt("scheduled_count_$todayKey", 0)
+        var scheduledCount = 0
         if (!forceReschedule) {
             val lastDate = prefs.getString(PREF_SCHEDULE_DATE, null)
             if (lastDate == todayKey) {
@@ -38,7 +41,6 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
                 return
             }
         }
-
         if (!config.enabled) {
             cancelAllNotifications()
             Log.d(TAG, "Config disabled. No alarms scheduled.")
@@ -58,8 +60,8 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
         cancelAllNotifications()
 
         // 1) Schedule overrides (explicit times from remote config)
-        var scheduledCount = 0
         config.overrides.forEach { remoteOverride ->
+            if (scheduledToday + scheduledCount >= limit) return@forEach
             val parts = remoteOverride.time.split(":")
             if (parts.size == 2) {
                 try {
@@ -102,6 +104,7 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             // Eğer cümle sayısı azsa, tekrar etsin
             val selectedSentences = List(timesPerDay) { idx -> candidateSentences[idx % candidateSentences.size] }
             randomMinutes.forEachIndexed { idx, minuteOffset ->
+                if (scheduledToday + scheduledCount >= limit) return@forEachIndexed
                 val calendar = Calendar.getInstance().apply {
                     timeInMillis = System.currentTimeMillis()
                     set(Calendar.HOUR_OF_DAY, startHour + (minuteOffset / 60))
@@ -121,8 +124,9 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
 
         // mark today's schedule time to avoid re-scheduling repeatedly
         prefs.edit().putString(PREF_SCHEDULE_DATE, todayKey).apply()
+        prefs.edit().putInt("scheduled_count_$todayKey", scheduledToday + scheduledCount).apply()
 
-        Log.d(TAG, "Total $scheduledCount notifications scheduled for today (including overrides and daily random).")
+        Log.d(TAG, "Total ${scheduledToday + scheduledCount} notifications scheduled for today (including overrides and daily random).")
     }
 
     private fun getTodayString(): String {
