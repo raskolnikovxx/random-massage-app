@@ -145,13 +145,12 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         // Immediately try to fetch remote config once on startup and apply schedules
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val cfg = controlConfig.fetchConfig() ?: controlConfig.getLocalConfig()
-                try {
-                    // Run scheduler on IO (not on Main) to avoid blocking UI thread
+                val cfg = controlConfig.fetchConfig() // Sadece Firebase'den gelen veri
+                if (cfg != null) {
                     Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
-                    Log.d("MainActivity", "Initial Planner.scheduleAllNotifications executed on startup (background thread).")
-                } catch (e: Exception) {
-                    Log.w("MainActivity", "Failed to run Planner on startup: ${e.message}")
+                    Log.d("MainActivity", "Planner.scheduleAllNotifications executed with Firebase config.")
+                } else {
+                    Log.w("MainActivity", "Firebase config alınamadı, alarm planlanmadı!")
                 }
             } catch (e: Exception) {
                 Log.w("MainActivity", "Startup config fetch failed: ${e.message}")
@@ -274,22 +273,23 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         }
 
         swipeRefreshLayout.setOnRefreshListener {
-            // Yenileme her zaman sayfalamayı resetlesin
             fetchRemoteConfigAsync { config ->
-                 // schedule planner on background to avoid blocking UI
-                 lifecycleScope.launch(Dispatchers.IO) {
-                     try {
-                         val cfg = controlConfig.getLocalConfig()
-                         Planner(this@MainActivity, cfg).scheduleAllNotifications(true)
-                     } catch (e: Exception) {
-                         Log.w(TAG, "Failed to schedule planner during refresh: ${e.message}")
-                     }
-                     withContext(Dispatchers.Main) {
-                         loadHistory(reset = true)
-                         swipeRefreshLayout.isRefreshing = false
-                     }
-                 }
-             }
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        if (config != null) {
+                            Planner(this@MainActivity, config).scheduleAllNotifications(true)
+                        } else {
+                            Log.w(TAG, "Firebase config alınamadı, alarm planlanmadı!")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to schedule planner during refresh: ${e.message}")
+                    }
+                    withContext(Dispatchers.Main) {
+                        loadHistory(reset = true)
+                        swipeRefreshLayout.isRefreshing = false
+                    }
+                }
+            }
         }
 
         setupSearchListener()
@@ -400,11 +400,14 @@ class MainActivity : AppCompatActivity(), HistoryItemListener {
         isLoadingMore = false
     }
 
-    private fun fetchRemoteConfigAsync(onComplete: ((RemoteConfig) -> Unit)? = null) {
+    private fun fetchRemoteConfigAsync(onComplete: ((RemoteConfig?) -> Unit)? = null) {
         lifecycleScope.launch(Dispatchers.IO) {
-            controlConfig.fetchConfig()
-            val config = controlConfig.getLocalConfig()
-            Planner(this@MainActivity, config).scheduleAllNotifications(false)
+            val config = controlConfig.fetchConfig()
+            if (config != null) {
+                Planner(this@MainActivity, config).scheduleAllNotifications(false)
+            } else {
+                Log.w(TAG, "Firebase config alınamadı, alarm planlanmadı!")
+            }
             withContext(Dispatchers.Main) {
                 loadHistory()
                 onComplete?.invoke(config)

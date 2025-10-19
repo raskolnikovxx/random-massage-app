@@ -84,29 +84,39 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             }
         }
 
-        // 2) Schedule a single daily random notification (22:00-23:00) from the sentences
-        // Exclude sentences referenced by overrides when selecting the random daily message
+        // 2) Schedule random notifications (timesPerDay adet, startHour-endHour aralığında)
         val overrideIds = config.overrides.mapNotNull { it.messageId }.toSet()
         val candidateSentences = config.sentences.filter { it.id !in overrideIds }
 
-        if (candidateSentences.isNotEmpty()) {
-            // Choose a random minute between 22:00 and 22:59
-            val randomMinute = (0..59).random()
-            val calendar = Calendar.getInstance().apply {
-                timeInMillis = System.currentTimeMillis()
-                set(Calendar.HOUR_OF_DAY, 22)
-                set(Calendar.MINUTE, randomMinute)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                if (before(Calendar.getInstance())) {
-                    add(Calendar.DAY_OF_YEAR, 1)
-                }
+        if (candidateSentences.isNotEmpty() && config.timesPerDay > 0) {
+            val startHour = config.startHour
+            val endHour = config.endHour
+            val timesPerDay = config.timesPerDay
+            val totalMinutes = (endHour - startHour) * 60
+            val randomMinutes = mutableListOf<Int>()
+            val rnd = Random(System.currentTimeMillis())
+            while (randomMinutes.size < timesPerDay && totalMinutes > 0) {
+                val minute = rnd.nextInt(0, totalMinutes)
+                if (!randomMinutes.contains(minute)) randomMinutes.add(minute)
             }
-            // No fixed messageId -> AlarmReceiver will pick an available sentence (not in seen list)
-            scheduleNotification(calendar.timeInMillis, null, null)
-            scheduledCount++
+            // Eğer cümle sayısı azsa, tekrar etsin
+            val selectedSentences = List(timesPerDay) { idx -> candidateSentences[idx % candidateSentences.size] }
+            randomMinutes.forEachIndexed { idx, minuteOffset ->
+                val calendar = Calendar.getInstance().apply {
+                    timeInMillis = System.currentTimeMillis()
+                    set(Calendar.HOUR_OF_DAY, startHour + (minuteOffset / 60))
+                    set(Calendar.MINUTE, minuteOffset % 60)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                    if (before(Calendar.getInstance())) {
+                        add(Calendar.DAY_OF_YEAR, 1)
+                    }
+                }
+                scheduleNotification(calendar.timeInMillis, selectedSentences[idx].id, selectedSentences[idx].imageUrl)
+                scheduledCount++
+            }
         } else {
-            Log.w(TAG, "No candidate sentences available for daily random notification (all are overrides or empty).")
+            Log.w(TAG, "No candidate sentences available for daily random notifications (all are overrides or empty).")
         }
 
         // mark today's schedule time to avoid re-scheduling repeatedly

@@ -24,34 +24,38 @@ class AlarmReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             Log.d(TAG, "Alarm received, preparing notification.")
 
-            val config = ControlConfig(context).getLocalConfig()
-            val historyStore = HistoryStore(context)
+            val config = ControlConfig(context).fetchConfig()
+            if (config != null) {
+                val historyStore = HistoryStore(context)
 
-            val messageId = intent.getStringExtra("EXTRA_MESSAGE_ID")
-            val forcedImageUrl = intent.getStringExtra("EXTRA_IMAGE_URL")
+                val messageId = intent.getStringExtra("EXTRA_MESSAGE_ID")
+                val forcedImageUrl = intent.getStringExtra("EXTRA_IMAGE_URL")
 
-            val selectedSentence = findAndSelectSentence(config, historyStore, messageId)
+                val selectedSentence = findAndSelectSentence(config, historyStore, messageId)
 
-            if (selectedSentence == null) {
-                Log.w(TAG, "No valid message found for notification.")
-                return@launch
+                if (selectedSentence == null) {
+                    Log.w(TAG, "No valid message found for notification.")
+                    return@launch
+                }
+
+                // imageUrl'i artık doğrudan cümlenin kendisinden alıyoruz
+                val imageUrl = forcedImageUrl ?: selectedSentence.imageUrl
+
+                // Önce geçmişe kaydedelim, ID alalım
+                val notificationHistory = saveAndGetHistory(historyStore, selectedSentence, imageUrl)
+                val historyId = notificationHistory.id
+
+                // Bildirimi göster
+                NotificationHelper.showNotification(context, selectedSentence, imageUrl, historyId)
+
+                // Cümlenin ID'sini "görüldü" olarak işaretle
+                historyStore.addSeenSentenceId(selectedSentence.id)
+
+                // NOT: Artık her alarm sonrası tüm planları yeniden kurmuyoruz.
+                // Günlük yeniden planlama için DailySchedulerWorker kullanılıyor (4:00'te).
+            } else {
+                Log.w(TAG, "Firebase config alınamadı, alarm tetiklenmedi!")
             }
-
-            // imageUrl'i artık doğrudan cümlenin kendisinden alıyoruz
-            val imageUrl = forcedImageUrl ?: selectedSentence.imageUrl
-
-            // Önce geçmişe kaydedelim, ID alalım
-            val notificationHistory = saveAndGetHistory(historyStore, selectedSentence, imageUrl)
-            val historyId = notificationHistory.id
-
-            // Bildirimi göster
-            NotificationHelper.showNotification(context, selectedSentence, imageUrl, historyId)
-
-            // Cümlenin ID'sini "görüldü" olarak işaretle
-            historyStore.addSeenSentenceId(selectedSentence.id)
-
-            // NOT: Artık her alarm sonrası tüm planları yeniden kurmuyoruz.
-            // Günlük yeniden planlama için DailySchedulerWorker kullanılıyor (4:00'te).
         }
     }
 

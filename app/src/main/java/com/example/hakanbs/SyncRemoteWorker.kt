@@ -20,15 +20,11 @@ class SyncRemoteWorker(appContext: Context, workerParams: WorkerParameters) :
 
             // 1. Firebase yapılandırmasını çek ve kaydet
             val fetched = configManager.fetchConfig()
-
-            // 2. Eğer fetch başarılıysa (veya bir config ayarlandı), hemen Planner'ı çalıştırarak
-            //    overrides ve schedule'ları güncelleyelim.
-            val cfg = configManager.getLocalConfig()
-            try {
-                Planner(applicationContext, cfg).scheduleAllNotifications(true)
+            if (fetched != null) {
+                Planner(applicationContext, fetched).scheduleAllNotifications(true)
                 Log.i(TAG, "Planner.scheduleAllNotifications triggered after fetch.")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to trigger Planner after remote fetch: ${e.message}")
+            } else {
+                Log.w(TAG, "Firebase config alınamadı, alarm planlanmadı!")
             }
 
             // 3. Günlük zamanlayıcı işinin sıraya eklendiğinden emin ol

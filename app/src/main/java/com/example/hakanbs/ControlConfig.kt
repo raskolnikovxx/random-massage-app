@@ -116,6 +116,18 @@ class ControlConfig(private val context: Context) {
         firebaseRemoteConfig.setDefaultsAsync(mapOf("app_config" to defaultJson))
     }
 
+    // RemoteConfig nesnesini default_config.json dosyasına yazar
+    private fun writeConfigToLocalJson(config: RemoteConfig) {
+        try {
+            val jsonString = gson.toJson(config)
+            val file = java.io.File(context.filesDir, "default_config.json")
+            file.writeText(jsonString, Charsets.UTF_8)
+            Log.d(TAG, "RemoteConfig başarıyla default_config.json dosyasına yazıldı.")
+        } catch (e: Exception) {
+            Log.e(TAG, "RemoteConfig local json'a yazılamadı: ${e.message}")
+        }
+    }
+
     suspend fun fetchConfig(): RemoteConfig? = withContext(Dispatchers.IO) {
         Log.d(TAG, "Fetching config from Firebase Remote Config.")
         try {
@@ -128,7 +140,8 @@ class ControlConfig(private val context: Context) {
             }
 
             val remote = gson.fromJson(jsonString, RemoteConfig::class.java)
-            // Sadece remote config kullanılıyor, yerel fallback kaldırıldı
+            // Firebase'den gelen config'i local json'a yaz
+            writeConfigToLocalJson(remote)
             return@withContext remote
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching config from Firebase: ${e.message}")

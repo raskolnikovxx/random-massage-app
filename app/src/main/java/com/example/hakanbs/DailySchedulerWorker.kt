@@ -20,13 +20,14 @@ class DailySchedulerWorker(
             val configManager = ControlConfig(applicationContext)
 
             // 1. Firebase yapılandırmasını çek
-            configManager.fetchConfig()
+            val fetched = configManager.fetchConfig()
+            if (fetched != null) {
+                Planner(applicationContext, fetched).scheduleAllNotifications()
+                Log.i(TAG, "Planner.scheduleAllNotifications triggered after fetch.")
+            } else {
+                Log.w(TAG, "Firebase config alınamadı, alarm planlanmadı!")
+            }
 
-            // 2. Planner'ı kullanarak yeni gün için rastgele saatleri hesapla/kaydet/planla
-            val config = configManager.getLocalConfig()
-            Planner(applicationContext, config).scheduleAllNotifications()
-
-            Log.i(TAG, "Daily schedule updated and alarms rescheduled for the new day.")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Error in daily scheduling: ${e.message}", e)
