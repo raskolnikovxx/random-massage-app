@@ -88,8 +88,10 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
 
         // 2) Schedule random notifications (timesPerDay adet, startHour-endHour aralığında)
         val overrideIds = config.overrides.mapNotNull { it.messageId }.toSet()
-        val candidateSentences = config.sentences.filter { it.id !in overrideIds }
-
+        // Hem Firebase hem yerel json'dan cümleleri birleştir
+        val localSentences = ControlConfig(context).getLocalConfig().sentences
+        val allSentences = config.sentences + localSentences
+        val candidateSentences = allSentences.filter { it.id !in overrideIds }
         if (candidateSentences.isNotEmpty() && config.timesPerDay > 0) {
             val startHour = config.startHour
             val endHour = config.endHour
