@@ -973,9 +973,10 @@ class GalleryRescueGameView @JvmOverloads constructor(
             } else {
                 val buttonPaint = Paint().apply { color = Color.BLUE; style = Paint.Style.FILL }
                 val buttonTextPaint = Paint().apply { color = Color.WHITE; textSize = 60f; textAlign = Paint.Align.CENTER }
-                finishRestartButtonRect.set(centerX - 250f, centerY + 60f, centerX + 250f, centerY + 160f)
+                val buttonY = height - 220f
+                finishRestartButtonRect.set(centerX - 250f, buttonY, centerX + 250f, buttonY + 100f)
                 canvas.drawRect(finishRestartButtonRect, buttonPaint)
-                canvas.drawText("Yeniden Oyna", centerX, centerY + 125f, buttonTextPaint)
+                canvas.drawText("Yeniden Oyna", centerX, buttonY + 65f, buttonTextPaint)
             }
         }
 
