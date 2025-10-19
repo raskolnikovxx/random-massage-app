@@ -31,6 +31,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
+import android.graphics.RadialGradient
+import android.graphics.Shader
 
 class GalleryRescueGameView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyle: Int = 0
@@ -88,7 +90,22 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
     // --- MANUEL KONTROL ---
     private val dpadButtons = mutableMapOf<String, RectF>()
-    private val dpadPaint = Paint().apply { color = Color.argb(100, 255, 255, 255) }
+    private val dpadPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+        shader = RadialGradient(0f, 0f, 1f, Color.WHITE, Color.LTGRAY, Shader.TileMode.CLAMP)
+    }
+    private val dpadBorderPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeWidth = 6f
+        color = Color.DKGRAY
+    }
+    private val dpadArrowPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+        color = Color.rgb(60, 60, 60)
+    }
     private var playerSpeed = 10f
     private var playerVx = 0f
     private var playerVy = 0f
@@ -487,11 +504,11 @@ class GalleryRescueGameView @JvmOverloads constructor(
     }
 
     private fun setupDpadButtons() {
-        val buttonSize = 160f
-        val margin = 60f
+        val margin = height * 0.03f // Daha az margin
+        val buttonSize = height * 0.06f // Daha küçük buton
         val bottom = height - margin
         val centerX = width / 2f
-        val centerY = bottom - buttonSize
+        val centerY = bottom - buttonSize * 1.3f // Dpad'i daha aşağıya çek
         dpadButtons.clear()
         dpadButtons["LEFT"] = RectF(centerX - buttonSize * 1.5f, centerY, centerX - buttonSize * 0.5f, centerY + buttonSize)
         dpadButtons["RIGHT"] = RectF(centerX + buttonSize * 0.5f, centerY, centerX + buttonSize * 1.5f, centerY + buttonSize)
@@ -873,16 +890,23 @@ class GalleryRescueGameView @JvmOverloads constructor(
         dpadButtons.forEach { (direction, rect) ->
             val cx = rect.centerX()
             val cy = rect.centerY()
-            val size = rect.width().coerceAtMost(rect.height()) * 0.4f
+            val radius = rect.width().coerceAtMost(rect.height()) * 0.5f
+            // Arka plan dairesi
+            canvas.save()
+            canvas.translate(cx, cy)
+            canvas.drawCircle(0f, 0f, radius, dpadPaint)
+            canvas.drawCircle(0f, 0f, radius, dpadBorderPaint)
+            // Ok çizimi
+            val size = radius * 0.6f
             val arrowPath = Path()
             when (direction) {
-                "UP" -> { arrowPath.moveTo(cx, cy - size); arrowPath.lineTo(cx - size, cy + size); arrowPath.lineTo(cx + size, cy + size); arrowPath.close() }
-                "DOWN" -> { arrowPath.moveTo(cx, cy + size); arrowPath.lineTo(cx - size, cy - size); arrowPath.lineTo(cx + size, cy - size); arrowPath.close() }
-                "LEFT" -> { arrowPath.moveTo(cx - size, cy); arrowPath.lineTo(cx + size, cy - size); arrowPath.lineTo(cx + size, cy + size); arrowPath.close() }
-                "RIGHT" -> { arrowPath.moveTo(cx + size, cy); arrowPath.lineTo(cx - size, cy - size); arrowPath.lineTo(cx - size, cy + size); arrowPath.close() }
+                "UP" -> { arrowPath.moveTo(0f, -size); arrowPath.lineTo(-size, size); arrowPath.lineTo(size, size); arrowPath.close() }
+                "DOWN" -> { arrowPath.moveTo(0f, size); arrowPath.lineTo(-size, -size); arrowPath.lineTo(size, -size); arrowPath.close() }
+                "LEFT" -> { arrowPath.moveTo(-size, 0f); arrowPath.lineTo(size, -size); arrowPath.lineTo(size, size); arrowPath.close() }
+                "RIGHT" -> { arrowPath.moveTo(size, 0f); arrowPath.lineTo(-size, -size); arrowPath.lineTo(-size, size); arrowPath.close() }
             }
-            canvas.drawPath(arrowPath, Paint().apply { color = Color.WHITE; style = Paint.Style.FILL; isAntiAlias = true; alpha = 180 })
-            canvas.drawPath(arrowPath, Paint().apply { color = Color.DKGRAY; style = Paint.Style.STROKE; strokeWidth = 6f; isAntiAlias = true })
+            canvas.drawPath(arrowPath, dpadArrowPaint)
+            canvas.restore()
         }
 
         if (isDrawingLine) {
@@ -934,16 +958,16 @@ class GalleryRescueGameView @JvmOverloads constructor(
 
         if (gameWon) {
             val centerX = width / 2f
-            val centerY = height / 2f
+            val buttonTopY = 120f
+            val messageY = buttonTopY - 40f // Butonun hemen üstü
             val paint = Paint().apply {
                 color = Color.GREEN
-                textSize = 100f
+                textSize = 54f // Daha küçük boyut
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
-                setShadowLayer(12f, 0f, 0f, Color.BLACK)
+                setShadowLayer(8f, 0f, 0f, Color.BLACK)
             }
-            canvas.drawText("OYUN TAMAMLANDI!", centerX, centerY, paint)
-
+            canvas.drawText("OYUN TAMAMLANDI!", centerX, messageY, paint)
             if (level < maxLevel) {
                 showNextLevelButton = true
             } else {
