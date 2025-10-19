@@ -272,8 +272,13 @@ class GalleryRescueGameView @JvmOverloads constructor(
         (backgroundDrawable as? Animatable)?.stop()
         unregisterGifCallbackIfAny()
 
-        val padding = 80f
-        playfield.set(padding, padding * 2, width - padding, height - padding - 300f)
+        // Ekran oranına göre dinamik padding ve alt boşluk
+        val padding = (height * 0.05f).coerceAtLeast(32f) // min 32px, %5
+        val dpadHeight = height * 0.15f // dpad ve butonlar için alan
+        val minPlayfieldHeight = height * 0.45f // min %45 ekran yüksekliği
+        val playfieldTop = padding * 1.5f
+        val playfieldBottom = (height - dpadHeight - padding).coerceAtLeast(playfieldTop + minPlayfieldHeight)
+        playfield.set(padding, playfieldTop, width - padding, playfieldBottom)
         setupDpadButtons()
         playerX = playfield.left
         playerY = playfield.top
