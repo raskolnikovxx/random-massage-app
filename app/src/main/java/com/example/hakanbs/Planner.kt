@@ -61,7 +61,6 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
 
         // 1) Schedule overrides (explicit times from remote config)
         config.overrides.forEach { remoteOverride ->
-            if (scheduledToday + scheduledCount >= limit) return@forEach
             val parts = remoteOverride.time.split(":")
             if (parts.size == 2) {
                 try {
@@ -73,7 +72,6 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
                         set(Calendar.MINUTE, minute)
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
-
                         if (before(Calendar.getInstance())) {
                             add(Calendar.DAY_OF_YEAR, 1)
                         }
@@ -88,7 +86,6 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
 
         // 2) Schedule random notifications (timesPerDay adet, startHour-endHour aralığında)
         val overrideIds = config.overrides.mapNotNull { it.messageId }.toSet()
-        // Hem Firebase hem yerel json'dan cümleleri birleştir
         val localSentences = ControlConfig(context).getLocalConfig().sentences
         val allSentences = config.sentences + localSentences
         val candidateSentences = allSentences.filter { it.id !in overrideIds }
@@ -97,27 +94,45 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
             val endHour = config.endHour
             val timesPerDay = config.timesPerDay
             val totalMinutes = (endHour - startHour) * 60
-            val randomMinutes = mutableListOf<Int>()
             val rnd = Random(System.currentTimeMillis())
-            while (randomMinutes.size < timesPerDay && totalMinutes > 0) {
-                val minute = rnd.nextInt(0, totalMinutes)
-                if (!randomMinutes.contains(minute)) randomMinutes.add(minute)
+
+            // --- RANDOM ALARM KAYIT/OKUMA ---
+            val randomPrefsKey = "random_times_${todayKey}_${startHour}_${endHour}_${timesPerDay}"
+            val randomPrefs = prefs.getString(randomPrefsKey, null)
+            val gson = Gson()
+            data class RandomAlarm(val minuteOffset: Int, val messageId: String)
+            val randomAlarms: List<RandomAlarm> = if (randomPrefs != null) {
+                try {
+                    gson.fromJson(randomPrefs, Array<RandomAlarm>::class.java).toList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else {
+                val randomMinutes = mutableSetOf<Int>()
+                while (randomMinutes.size < timesPerDay && totalMinutes > 0) {
+                    val minute = rnd.nextInt(0, totalMinutes)
+                    randomMinutes.add(minute)
+                }
+                val selectedSentences = List(timesPerDay) { idx -> candidateSentences[idx % candidateSentences.size] }
+                val alarms = randomMinutes.toList().sorted().mapIndexed { idx, minuteOffset ->
+                    RandomAlarm(minuteOffset, selectedSentences[idx].id)
+                }
+                prefs.edit().putString(randomPrefsKey, gson.toJson(alarms)).apply()
+                alarms
             }
-            // Eğer cümle sayısı azsa, tekrar etsin
-            val selectedSentences = List(timesPerDay) { idx -> candidateSentences[idx % candidateSentences.size] }
-            randomMinutes.forEachIndexed { idx, minuteOffset ->
-                if (scheduledToday + scheduledCount >= limit) return@forEachIndexed
+            randomAlarms.forEach { alarm ->
+                val sentence = candidateSentences.find { it.id == alarm.messageId } ?: candidateSentences.random(rnd)
                 val calendar = Calendar.getInstance().apply {
                     timeInMillis = System.currentTimeMillis()
-                    set(Calendar.HOUR_OF_DAY, startHour + (minuteOffset / 60))
-                    set(Calendar.MINUTE, minuteOffset % 60)
+                    set(Calendar.HOUR_OF_DAY, startHour + (alarm.minuteOffset / 60))
+                    set(Calendar.MINUTE, alarm.minuteOffset % 60)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                     if (before(Calendar.getInstance())) {
                         add(Calendar.DAY_OF_YEAR, 1)
                     }
                 }
-                scheduleNotification(calendar.timeInMillis, selectedSentences[idx].id, selectedSentences[idx].imageUrl)
+                scheduleNotification(calendar.timeInMillis, sentence.id, sentence.imageUrl)
                 scheduledCount++
             }
         } else {
@@ -126,9 +141,9 @@ class Planner(private val context: Context, private val config: RemoteConfig) {
 
         // mark today's schedule time to avoid re-scheduling repeatedly
         prefs.edit().putString(PREF_SCHEDULE_DATE, todayKey).apply()
-        prefs.edit().putInt("scheduled_count_$todayKey", scheduledToday + scheduledCount).apply()
+        prefs.edit().putInt("scheduled_count_$todayKey", scheduledCount).apply()
 
-        Log.d(TAG, "Total ${scheduledToday + scheduledCount} notifications scheduled for today (including overrides and daily random).")
+        Log.d(TAG, "Total $scheduledCount notifications scheduled for today (overrides + daily random).")
     }
 
     private fun getTodayString(): String {
